@@ -31,15 +31,6 @@ export function TransactionsContent({ type = 'All' }: { type?: 'All' | 'Income' 
   const filtered = useMemo(() => typeRows.filter((row) => `${row.id} ${row.reference} ${row.party} ${row.category}`.toLowerCase().includes(query.toLowerCase()) && (status === 'All statuses' || row.status === status)), [typeRows, query, status]);
   const title = type === 'Income' ? 'Income register' : type === 'Expense' ? 'Expense register' : 'Transaction register';
   const copy = type === 'Income' ? 'Track recognized revenue, collections, and supporting invoices.' : type === 'Expense' ? 'Control operating spend, evidence, approvals, and payment status.' : 'Review, trace, and control all financial activity.';
-  const exportCsv = () => {
-    const headers = ['Transaction ID', 'Date', 'Type', 'Reference', 'Counterparty', 'Department', 'Category', 'Amount', 'Status'];
-    const lines = filtered.map((row) => [row.id, row.date, row.type, row.reference, row.party, row.department, row.category, row.amount, row.status].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(','));
-    const blob = new Blob([[headers.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url; anchor.download = `ledgerflow-${type.toLowerCase()}-2026-08.csv`; document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
-    setNotice(`${filtered.length} records exported successfully.`);
-  };
   const saveTransaction = (event: React.FormEvent) => {
     event.preventDefault();
     const numericAmount = Number(draft.amount);
@@ -50,7 +41,7 @@ export function TransactionsContent({ type = 'All' }: { type?: 'All' | 'Income' 
   };
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between"><div><p className="mb-1 text-xs text-muted-foreground">Finance / {type === 'All' ? 'Transactions' : type}</p><h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1><p className="mt-1 text-sm text-muted-foreground">{copy}</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" className="bg-card" onClick={exportCsv}><Download /> Export</Button><Button onClick={() => { setNotice(''); setDialogOpen(true); }}><Plus /> New {type === 'All' ? 'transaction' : type.toLowerCase()}</Button></div></div>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between"><div><p className="mb-1 text-xs text-muted-foreground">Finance / {type === 'All' ? 'Transactions' : type}</p><h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1><p className="mt-1 text-sm text-muted-foreground">{copy}</p></div><div className="flex flex-wrap gap-2"><a href="/api/transactions/export" download className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-input bg-card px-3 text-sm font-medium shadow-xs transition-colors hover:bg-muted"><Download className="size-4" /> Export</a><Button onClick={() => { setNotice(''); setDialogOpen(true); }}><Plus /> New {type === 'All' ? 'transaction' : type.toLowerCase()}</Button></div></div>
       {notice ? <div role="status" className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${notice.includes('required') ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}><CheckCircle2 className="size-4" />{notice}</div> : null}
       <Card className="gap-0 shadow-[0_1px_2px_rgb(15_23_42/3%)]"><CardContent className="p-3"><div className="flex flex-col gap-2 md:flex-row"><div className="relative min-w-0 flex-1"><Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search ID, reference, counterparty or category" className="h-9 pl-8" /></div><select value={status} onChange={(e) => setStatus(e.target.value)} className="h-9 rounded-lg border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"><option>All statuses</option><option>Paid</option><option>Pending</option><option>Approved</option><option>Overdue</option><option>Missing Document</option></select><Button variant="outline" className="h-9"><CalendarDays /> 1–31 Aug 2026</Button><Button variant="outline" className="h-9"><Filter /> More filters</Button></div></CardContent></Card>
       <div className="grid min-h-[590px] gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
