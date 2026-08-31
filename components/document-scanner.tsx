@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, FileImage, FileText, Loader2, ScanLine, Upload, X } from 'lucide-react';
+import { AlertCircle, Camera, CheckCircle2, FileImage, FileText, Loader2, ScanLine, Upload, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,10 +14,9 @@ export type ScannedTransaction = {
   confidence: number; warnings: string[];
 };
 
-const supportedTypes = ['image/png', 'image/jpeg', 'application/pdf'];
-
 export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onApply: (result: ScannedTransaction) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [progress, setProgress] = useState(0);
@@ -31,8 +30,8 @@ export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onA
   const chooseFile = (selected?: File) => {
     if (!selected) return;
     setError(''); setResult(null); setRawText(''); setProgress(0);
-    if (!supportedTypes.includes(selected.type)) { setError('Unsupported file. Choose PNG, JPG/JPEG, or PDF.'); return; }
-    if (selected.size > 10 * 1024 * 1024) { setError('File is larger than 10 MB. Choose a smaller document.'); return; }
+    if (!(selected.type.startsWith('image/') || selected.type === 'application/pdf')) { setError('Unsupported file. Take a photo or choose an image or PDF.'); return; }
+    if (selected.size > 20 * 1024 * 1024) { setError('File is larger than 20 MB. Choose a smaller document.'); return; }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setFile(selected); setPreviewUrl(selected.type.startsWith('image/') ? URL.createObjectURL(selected) : '');
     setStatus(`${selected.name} is ready to scan.`);
@@ -99,12 +98,18 @@ export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onA
     }
   };
 
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-0 backdrop-blur-sm sm:p-4">
     <button type="button" aria-label="Close document scanner" className="absolute inset-0" onClick={onClose} />
-    <section aria-label="OCR import transaction document" className="relative z-10 max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border bg-card shadow-2xl">
-      <header className="flex items-start justify-between border-b p-5"><div className="flex gap-3"><span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary"><ScanLine className="size-5" /></span><div><h2 className="text-xl font-semibold">Intelligent OCR import</h2><p className="mt-1 text-xs text-muted-foreground">Extract a transaction from PNG, JPG/JPEG, or PDF · maximum 10 MB · reads up to 3 PDF pages</p></div></div><Button type="button" variant="ghost" size="icon" aria-label="Close scanner" onClick={onClose}><X /></Button></header>
-      <div className="space-y-5 p-5">
-        <input ref={inputRef} type="file" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" className="sr-only" onChange={(event) => chooseFile(event.target.files?.[0])} />
+    <section aria-label="OCR import transaction document" className="relative z-10 h-[100dvh] w-full max-w-4xl overflow-y-auto border bg-card shadow-2xl sm:h-auto sm:max-h-[92vh] sm:rounded-2xl">
+      <header className="sticky top-0 z-10 flex items-start justify-between border-b bg-card p-4 sm:p-5"><div className="flex gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><ScanLine className="size-5" /></span><div><h2 className="text-lg font-semibold sm:text-xl">Intelligent OCR import</h2><p className="mt-1 text-xs text-muted-foreground">Use your phone camera, gallery, or a PDF · maximum 20 MB</p></div></div><Button type="button" variant="ghost" size="icon" aria-label="Close scanner" onClick={onClose}><X /></Button></header>
+      <div className="space-y-4 p-4 sm:space-y-5 sm:p-5">
+        <input ref={inputRef} type="file" accept="image/*,.pdf,application/pdf" className="sr-only" onChange={(event) => chooseFile(event.target.files?.[0])} />
+        <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={(event) => chooseFile(event.target.files?.[0])} />
+        <div className="grid grid-cols-2 gap-2">
+          <Button type="button" className="h-11" onClick={() => cameraRef.current?.click()}><Camera /> Take photo</Button>
+          <Button type="button" variant="outline" className="h-11" onClick={() => inputRef.current?.click()}><Upload /> Choose file</Button>
+        </div>
+        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800"><strong>Camera tip:</strong> Place the full document inside the frame, keep the phone steady, and avoid shadows or glare.</div>
         <button type="button" onClick={() => inputRef.current?.click()} onDrop={(event) => { event.preventDefault(); chooseFile(event.dataTransfer.files?.[0]); }} onDragOver={(event) => event.preventDefault()} className="grid min-h-40 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center transition hover:border-primary/45 hover:bg-primary/[0.03]">
           {previewUrl ? <img src={previewUrl} alt="Selected document preview" className="max-h-48 rounded-lg object-contain" /> : file ? <div><FileText className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">{file.name}</p><p className="mt-1 text-xs text-muted-foreground">PDF · {(file.size / 1024 / 1024).toFixed(2)} MB</p></div> : <div><Upload className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">Drop a document here or choose a file</p><p className="mt-1 text-xs text-muted-foreground">Invoices, receipts, purchase orders, and payment evidence</p></div>}
         </button>
