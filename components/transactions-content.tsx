@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ArrowLeftRight, CalendarDays, CheckCircle2, ChevronRight, Download, FileCheck2, Filter, Plus, ScanLine, Search, ShieldCheck, X } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, CheckCircle2, ChevronRight, Download, FileCheck2, Filter, Pencil, Plus, ScanLine, Search, ShieldCheck, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -48,11 +48,29 @@ export function TransactionsContent({ type = 'All' }: { type?: 'All' | 'Income' 
   const [notice, setNotice] = useState('');
   const [draft, setDraft] = useState<TransactionDraft>(() => blankDraft(type));
   const [selected, setSelected] = useState<TransactionRow>(type === 'Income' ? initialRows[1] : initialRows[0]);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const typeRows = useMemo(() => type === 'All' ? records : records.filter((row) => row.type === type), [records, type]);
   const filtered = useMemo(() => typeRows.filter((row) => `${row.id} ${row.reference} ${row.party} ${row.category}`.toLowerCase().includes(query.toLowerCase()) && (status === 'All statuses' || row.status === status)), [typeRows, query, status]);
   const title = type === 'Income' ? 'Income register' : type === 'Expense' ? 'Expense register' : 'Transaction register';
   const copy = type === 'Income' ? 'Track recognized revenue, collections, and supporting invoices.' : type === 'Expense' ? 'Control operating spend, evidence, approvals, and payment status.' : 'Review, trace, and control all financial activity.';
+
+  const openNewTransaction = () => {
+    setEditingId(null); setDraft(blankDraft(type)); setNotice(''); setDialogOpen(true);
+  };
+
+  const openEditTransaction = (record: TransactionRow) => {
+    setEditingId(record.id);
+    setDraft({
+      type: record.type === 'Income' ? 'Income' : 'Expense', documentType: record.documentType || 'Financial document',
+      date: record.date, dueDate: record.dueDate || '', reference: record.reference, party: record.party,
+      description: record.description || '', department: record.department, category: record.category,
+      currency: record.currency || 'USD', subtotal: record.subtotal || '', tax: record.tax || '',
+      amount: record.amount.replace(/[^0-9.-]/g, ''), paymentMethod: record.paymentMethod || '',
+      purchaseOrder: record.purchaseOrder || '',
+    });
+    setNotice(''); setDialogOpen(true);
+  };
 
   const saveTransaction = (event: React.FormEvent) => {
     event.preventDefault();
@@ -61,27 +79,30 @@ export function TransactionsContent({ type = 'All' }: { type?: 'All' | 'Income' 
       setNotice('Complete customer/vendor, reference, issue date, description, category, and a valid amount.'); return;
     }
     const currency = draft.currency || 'USD';
+    const existing = editingId ? records.find((row) => row.id === editingId) : undefined;
     const record: TransactionRow = {
-      id: `TRX-2026-${String(842 + records.length).padStart(4, '0')}`, date: draft.date, type: draft.type,
+      id: existing?.id || `TRX-2026-${String(842 + records.length).padStart(4, '0')}`, date: draft.date, type: draft.type,
       reference: draft.reference.trim(), party: draft.party.trim(), department: draft.department,
       category: draft.category.trim(), amount: new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(numericAmount),
-      status: 'Pending', approval: 'Finance review', owner: 'Jordan Lee', dueDate: draft.dueDate, currency,
+      status: 'Pending', approval: 'Finance review', owner: existing?.owner || 'Jordan Lee', dueDate: draft.dueDate, currency,
       subtotal: draft.subtotal, tax: draft.tax, description: draft.description, paymentMethod: draft.paymentMethod,
       purchaseOrder: draft.purchaseOrder, documentType: draft.documentType,
     };
-    setRecords((current) => [record, ...current]); setSelected(record); setDialogOpen(false);
-    setNotice(`${record.id} saved as Pending.`); setDraft(blankDraft(type));
+    setRecords((current) => existing ? current.map((row) => row.id === record.id ? record : row) : [record, ...current]);
+    setSelected(record); setDialogOpen(false);
+    setNotice(existing ? `${record.id} updated and returned to Pending finance review.` : `${record.id} saved as Pending.`);
+    setEditingId(null); setDraft(blankDraft(type));
   };
 
   const useScannedData = (scanned: ScannedTransaction) => {
     const { confidence: _confidence, warnings: _warnings, ...fields } = scanned;
-    setDraft({ ...fields, department: 'Operations' }); setScanOpen(false); setNotice(''); setDialogOpen(true);
+    setEditingId(null); setDraft({ ...fields, department: 'Operations' }); setScanOpen(false); setNotice(''); setDialogOpen(true);
   };
 
   return <div className="space-y-5">
     <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
       <div><p className="mb-1 text-xs text-muted-foreground">Finance / {type === 'All' ? 'Transactions' : type}</p><h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1><p className="mt-1 text-sm text-muted-foreground">{copy}</p></div>
-      <div className="flex flex-wrap gap-2"><a href="/api/transactions/export" download className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-input bg-card px-3 text-sm font-medium shadow-xs transition-colors hover:bg-muted"><Download className="size-4" /> Export</a><Button variant="outline" className="bg-card" onClick={() => setScanOpen(true)}><ScanLine /> Scan document</Button><Button onClick={() => { setNotice(''); setDialogOpen(true); }}><Plus /> New {type === 'All' ? 'transaction' : type.toLowerCase()}</Button></div>
+      <div className="flex flex-wrap gap-2"><a href="/api/transactions/export" download className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-input bg-card px-3 text-sm font-medium shadow-xs transition-colors hover:bg-muted"><Download className="size-4" /> Export</a><Button variant="outline" className="bg-card" onClick={() => setScanOpen(true)}><ScanLine /> Scan document</Button><Button onClick={openNewTransaction}><Plus /> New {type === 'All' ? 'transaction' : type.toLowerCase()}</Button></div>
     </div>
     {notice ? <div role="status" className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${notice.includes('required') ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}><CheckCircle2 className="size-4" />{notice}</div> : null}
     {scanOpen ? <DocumentScanner onClose={() => setScanOpen(false)} onApply={useScannedData} /> : null}
@@ -91,10 +112,10 @@ export function TransactionsContent({ type = 'All' }: { type?: 'All' | 'Income' 
     <div className="grid min-h-[590px] gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <Card className="min-w-0 gap-0"><CardHeader className="border-b py-4"><CardTitle className="flex items-center justify-between"><span>{filtered.length} transactions</span><span className="text-xs font-normal text-muted-foreground">Finance register</span></CardTitle></CardHeader><CardContent className="px-2 pb-2"><Table><TableHeader><TableRow><TableHead>Transaction</TableHead><TableHead>Counterparty</TableHead><TableHead className="hidden lg:table-cell">Department</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="w-8" /></TableRow></TableHeader><TableBody>{filtered.map((row) => <TableRow key={row.id} onClick={() => setSelected(row)} data-state={selected.id === row.id ? 'selected' : undefined} className="cursor-pointer"><TableCell><p className="font-medium">{row.id}</p><p className="text-[11px] text-muted-foreground">{row.date} · {row.type}</p></TableCell><TableCell><p>{row.party}</p><p className="text-[11px] text-muted-foreground">{row.reference}</p></TableCell><TableCell className="hidden text-muted-foreground lg:table-cell">{row.department}</TableCell><TableCell><Badge variant="outline" className={badgeStyles[row.status]}>{row.status}</Badge></TableCell><TableCell className="text-right font-mono text-xs font-semibold">{row.amount}</TableCell><TableCell><ChevronRight className="size-4 text-muted-foreground" /></TableCell></TableRow>)}</TableBody></Table>{filtered.length === 0 ? <div className="grid min-h-56 place-items-center text-center"><div><Search className="mx-auto mb-2 size-7 text-muted-foreground" /><p className="font-medium">No matching transactions</p><p className="mt-1 text-sm text-muted-foreground">Adjust the search or status filter.</p></div></div> : null}</CardContent></Card>
 
-      <Card className="h-fit gap-0 xl:sticky xl:top-20"><CardHeader className="border-b py-4"><div><p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-muted-foreground">Transaction detail</p><CardTitle className="mt-1">{selected.id}</CardTitle></div></CardHeader><CardContent className="space-y-5 p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-muted-foreground">Total amount</p><p className="metric-value mt-1 text-2xl font-semibold">{selected.amount}</p></div><Badge variant="outline" className={badgeStyles[selected.status]}>{selected.status}</Badge></div><dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-xs"><Detail label="Counterparty" value={selected.party} /><Detail label="Reference" value={selected.reference} /><Detail label="Issue date" value={selected.date} /><Detail label="Department" value={selected.department} /><Detail label="Category" value={selected.category} /><Detail label="Responsible" value={selected.owner} /><Detail label="Approval" value={selected.approval} />{selected.dueDate ? <Detail label="Due date" value={selected.dueDate} /> : null}{selected.tax ? <Detail label="Tax / VAT" value={`${selected.currency || 'USD'} ${selected.tax}`} /> : null}{selected.paymentMethod ? <Detail label="Payment method" value={selected.paymentMethod} /> : null}{selected.purchaseOrder ? <Detail label="Purchase order" value={selected.purchaseOrder} /> : null}</dl>{selected.description ? <div className="rounded-xl border bg-muted/20 p-3 text-xs"><p className="text-muted-foreground">Description</p><p className="mt-1">{selected.description}</p></div> : null}<div className="rounded-xl border bg-muted/30 p-3"><div className="flex items-center gap-2 text-xs font-semibold"><ArrowLeftRight className="size-4 text-primary" /> Balanced journal</div><div className="mt-3 flex justify-between text-xs"><span className="text-muted-foreground">Debit</span><span className="font-mono">{selected.amount}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-muted-foreground">Credit</span><span className="font-mono">{selected.amount}</span></div></div><div className="space-y-2"><div className="flex items-center gap-2 text-xs"><FileCheck2 className="size-4 text-emerald-600" /><span>Supporting document linked</span></div><div className="flex items-center gap-2 text-xs"><ShieldCheck className="size-4 text-emerald-600" /><span>Audit trail intact</span></div></div><div className="grid grid-cols-2 gap-2"><Button variant="outline">View documents</Button><Button>Open record</Button></div></CardContent></Card>
+      <Card className="h-fit gap-0 xl:sticky xl:top-20"><CardHeader className="border-b py-4"><div><p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-muted-foreground">Transaction detail</p><CardTitle className="mt-1">{selected.id}</CardTitle></div></CardHeader><CardContent className="space-y-5 p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-muted-foreground">Total amount</p><p className="metric-value mt-1 text-2xl font-semibold">{selected.amount}</p></div><Badge variant="outline" className={badgeStyles[selected.status]}>{selected.status}</Badge></div><dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-xs"><Detail label="Counterparty" value={selected.party} /><Detail label="Reference" value={selected.reference} /><Detail label="Issue date" value={selected.date} /><Detail label="Department" value={selected.department} /><Detail label="Category" value={selected.category} /><Detail label="Responsible" value={selected.owner} /><Detail label="Approval" value={selected.approval} />{selected.dueDate ? <Detail label="Due date" value={selected.dueDate} /> : null}{selected.tax ? <Detail label="Tax / VAT" value={`${selected.currency || 'USD'} ${selected.tax}`} /> : null}{selected.paymentMethod ? <Detail label="Payment method" value={selected.paymentMethod} /> : null}{selected.purchaseOrder ? <Detail label="Purchase order" value={selected.purchaseOrder} /> : null}</dl>{selected.description ? <div className="rounded-xl border bg-muted/20 p-3 text-xs"><p className="text-muted-foreground">Description</p><p className="mt-1">{selected.description}</p></div> : null}<div className="rounded-xl border bg-muted/30 p-3"><div className="flex items-center gap-2 text-xs font-semibold"><ArrowLeftRight className="size-4 text-primary" /> Balanced journal</div><div className="mt-3 flex justify-between text-xs"><span className="text-muted-foreground">Debit</span><span className="font-mono">{selected.amount}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-muted-foreground">Credit</span><span className="font-mono">{selected.amount}</span></div></div><div className="space-y-2"><div className="flex items-center gap-2 text-xs"><FileCheck2 className="size-4 text-emerald-600" /><span>Supporting document linked</span></div><div className="flex items-center gap-2 text-xs"><ShieldCheck className="size-4 text-emerald-600" /><span>Audit trail intact</span></div></div><div className="grid grid-cols-2 gap-2"><Button variant="outline">View documents</Button><Button onClick={() => openEditTransaction(selected)}><Pencil /> Edit transaction</Button></div></CardContent></Card>
     </div>
 
-    {dialogOpen ? <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm"><button type="button" aria-label="Close new transaction dialog" className="absolute inset-0" onClick={() => setDialogOpen(false)} /><form aria-label="New transaction form" onSubmit={saveTransaction} className="relative z-10 max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border bg-card shadow-2xl"><div className="flex items-start justify-between border-b p-5"><div><h2 className="text-xl font-semibold">Review transaction</h2><p className="mt-1 text-xs text-muted-foreground">Confirm scanned values. Saving creates a Pending record for finance review.</p></div><Button type="button" variant="ghost" size="icon" aria-label="Close dialog" onClick={() => setDialogOpen(false)}><X /></Button></div><div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
+    {dialogOpen ? <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm"><button type="button" aria-label="Close transaction dialog" className="absolute inset-0" onClick={() => setDialogOpen(false)} /><form aria-label={editingId ? 'Edit transaction form' : 'New transaction form'} onSubmit={saveTransaction} className="relative z-10 max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border bg-card shadow-2xl"><div className="flex items-start justify-between border-b p-5"><div><h2 className="text-xl font-semibold">{editingId ? `Edit ${editingId}` : 'Review transaction'}</h2><p className="mt-1 text-xs text-muted-foreground">{editingId ? 'Changes return the record to Pending finance review and remain traceable.' : 'Confirm scanned values. Saving creates a Pending record for finance review.'}</p></div><Button type="button" variant="ghost" size="icon" aria-label="Close dialog" onClick={() => setDialogOpen(false)}><X /></Button></div><div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
       <Field label="Transaction type"><select value={draft.type} disabled={type !== 'All'} onChange={(event) => setDraft({ ...draft, type: event.target.value as 'Income' | 'Expense' })} className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"><option>Income</option><option>Expense</option></select></Field>
       <Field label="Document type"><Input value={draft.documentType} onChange={(event) => setDraft({ ...draft, documentType: event.target.value })} className="mt-2" /></Field>
       <Field label="Issue date"><Input required value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} className="mt-2" /></Field>
@@ -110,7 +131,7 @@ export function TransactionsContent({ type = 'All' }: { type?: 'All' | 'Income' 
       <Field label="Total amount"><Input required type="number" min="0.01" step="0.01" value={draft.amount} onChange={(event) => setDraft({ ...draft, amount: event.target.value })} className="mt-2" /></Field>
       <Field label="Payment method"><Input value={draft.paymentMethod} onChange={(event) => setDraft({ ...draft, paymentMethod: event.target.value })} className="mt-2" /></Field>
       <label className="text-xs font-medium sm:col-span-2 lg:col-span-3">Description<textarea required value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} rows={3} className="mt-2 w-full rounded-lg border bg-card px-3 py-2 text-sm" /></label>
-    </div><div className="flex justify-end gap-2 border-t p-5"><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button><Button type="submit">Save as Pending</Button></div></form></div> : null}
+    </div><div className="flex justify-end gap-2 border-t p-5"><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button><Button type="submit">{editingId ? 'Save changes for review' : 'Save as Pending'}</Button></div></form></div> : null}
   </div>;
 }
 
