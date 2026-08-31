@@ -53,7 +53,10 @@ export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onA
         for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
           const page = await pdf.getPage(pageNumber);
           const content = await page.getTextContent();
-          const pageText = content.items.map((item) => 'str' in item ? item.str : '').join(' ').trim();
+          const pageText = content.items.map((item) => {
+            if (!('str' in item)) return '';
+            return `${item.str}${'hasEOL' in item && item.hasEOL ? '\n' : ' '}`;
+          }).join('').trim();
           text += `${pageText}\n`;
           if (pageText.length < 40 && pageNumber <= 2) {
             const viewport = page.getViewport({ scale: 2.25 });
@@ -115,7 +118,7 @@ export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onA
             <ScanField label="Customer / Vendor" value={result.party} onChange={(value) => setResult({ ...result, party: value })} />
             <ScanField label="Invoice / Receipt no." value={result.reference} onChange={(value) => setResult({ ...result, reference: value })} />
             <ScanField label="Purchase order" value={result.purchaseOrder} onChange={(value) => setResult({ ...result, purchaseOrder: value })} />
-            <ScanField label="Document date" value={result.date} onChange={(value) => setResult({ ...result, date: value })} />
+            <ScanField label="Issue date" value={result.date} onChange={(value) => setResult({ ...result, date: value })} />
             <ScanField label="Due date" value={result.dueDate} onChange={(value) => setResult({ ...result, dueDate: value })} />
             <ScanField label="Currency" value={result.currency} onChange={(value) => setResult({ ...result, currency: value.toUpperCase() })} />
             <ScanField label="Subtotal" value={result.subtotal} onChange={(value) => setResult({ ...result, subtotal: value })} />
@@ -168,14 +171,14 @@ function parseDocument(text: string): ScannedTransaction {
   const documentType = /purchase\s*order|\bpo\b/i.test(cleaned) ? 'Purchase order' : /receipt|amount received|paid/i.test(cleaned) ? 'Receipt' : /invoice|tax invoice|bill/i.test(cleaned) ? 'Invoice' : /payment|transfer|remittance/i.test(cleaned) ? 'Payment evidence' : 'Financial document';
   const reference = labeledText(lines, ['invoice number', 'invoice no', 'invoice #', 'receipt number', 'receipt no', 'receipt #', 'bill number', 'bill no', 'reference number', 'reference no', 'ref no', 'document no']) || cleaned.match(/\b(?:INV|RCT|REC|BILL)[-/# ]?[A-Z0-9-]{3,}\b/i)?.[0] || '';
   const purchaseOrder = labeledText(lines, ['purchase order', 'po number', 'po no', 'p.o. no']) || cleaned.match(/\bPO[-/# ]?[A-Z0-9-]{3,}\b/i)?.[0] || '';
-  const dueDate = labeledDate(lines, ['payment due', 'due date', 'due']) || '';
-  const date = labeledDate(lines, ['invoice date', 'receipt date', 'document date', 'issue date', 'date']) || findDates(cleaned).find((value) => value !== dueDate) || '';
+  const dueDate = inlineLabeledDate(cleaned, ['payment due', 'due date', 'due']) || labeledDate(lines, ['payment due', 'due date', 'due']) || '';
+  const date = inlineLabeledDate(cleaned, ['issue date', 'invoice date', 'receipt date', 'document date', 'issued', 'date']) || labeledDate(lines, ['issue date', 'invoice date', 'receipt date', 'document date', 'issued', 'date']) || findDates(cleaned).find((value) => value !== dueDate) || '';
   const total = labeledAmount(lines, ['grand total', 'total due', 'amount due', 'balance due', 'invoice total', 'net total', 'total amount', 'total']);
   const subtotal = labeledAmount(lines, ['sub total', 'subtotal', 'net amount', 'amount before tax']);
   const tax = labeledAmount(lines, ['tax amount', 'vat amount', 'gst amount', 'sales tax', 'vat', 'gst', 'tax']);
   const allAmounts = extractAmounts(cleaned); const amount = total || (allAmounts.length ? Math.max(...allAmounts).toFixed(2) : '');
   const party = cleanValue(labeledText(lines, ['vendor', 'supplier', 'merchant', 'bill from', 'sold by', 'from', 'customer', 'client'])) || lines.find((line, index) => index < 10 && isLikelyParty(line)) || '';
-  const description = cleanValue(labeledText(lines, ['description', 'service', 'particulars', 'details', 'item'])) || lines.find((line) => /\b(service|subscription|consulting|software|equipment|supplies|freight|rent|fee)\b/i.test(line)) || '';
+  const description = findDescription(lines, cleaned);
   const paymentMethodMatch = cleaned.match(/\b(?:payment method|paid by|method)\s*[:#-]?\s*(cash|credit card|debit card|card|bank transfer|wire transfer|ach|cheque|check)\b/i)?.[1] || cleaned.match(/\b(cash|credit card|debit card|bank transfer|wire transfer|ach|cheque)\b/i)?.[1] || '';
   const paymentMethod = paymentMethodMatch.replace(/\b\w/g, (character) => character.toUpperCase());
   const currency = detectCurrency(cleaned);
@@ -184,7 +187,8 @@ function parseDocument(text: string): ScannedTransaction {
   const warnings: string[] = [];
   if (!party) warnings.push('Customer or vendor was not confidently detected.');
   if (!reference) warnings.push('Invoice or receipt number is missing.');
-  if (!date) warnings.push('Document date is missing.');
+  if (!date) warnings.push('Issue date is missing.');
+  if (!description) warnings.push('Description is missing.');
   if (!amount) warnings.push('Total amount is missing.');
   if (subtotal && tax && amount && Math.abs(Number(subtotal) + Number(tax) - Number(amount)) > 0.02) warnings.push('Subtotal plus tax does not match the detected total.');
   if (type === 'Expense' && !/vendor|supplier|bill from|receipt|purchase/i.test(lower)) warnings.push('Transaction type defaulted to Expense; confirm before saving.');
@@ -199,7 +203,38 @@ function labeledText(lines: string[], labels: string[]) {
   return '';
 }
 function labeledDate(lines: string[], labels: string[]) { const value = labeledText(lines, labels); return findDates(value)[0] || ''; }
+function inlineLabeledDate(value: string, labels: string[]) {
+  for (const label of labels) {
+    const match = value.match(new RegExp(`\\b${escapeRegExp(label)}\\b\\s*[:#-]?\\s*([^\\n]{0,60})`, 'i'));
+    const detected = findDates(match?.[1] || '')[0];
+    if (detected) return detected;
+  }
+  return '';
+}
 function findDates(value: string) { return value.match(/\b(?:\d{4}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{2,4})\b/gi) || []; }
+function findDescription(lines: string[], value: string) {
+  const label = /\b(?:description|item description|service description|particulars|details|memo|purpose)\b/i;
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!label.test(lines[index])) continue;
+    const sameLine = cleanDescription(lines[index].replace(label, '').replace(/^\s*[:#-]\s*/, ''));
+    if (sameLine) return sameLine;
+    for (let next = index + 1; next < Math.min(lines.length, index + 7); next += 1) {
+      const candidate = cleanDescription(lines[next]);
+      if (candidate) return candidate;
+    }
+  }
+  const inline = value.match(/\b(?:description|item description|service description|particulars|details|memo|purpose)\b\s*[:#-]?\s*(.+?)(?=\b(?:qty|quantity|unit price|rate|amount|subtotal|tax|vat|total|issue date|due date)\b|\n|$)/i)?.[1] || '';
+  const cleanedInline = cleanDescription(inline);
+  if (cleanedInline) return cleanedInline;
+  const itemLine = lines.find((line) => /[A-Za-z]{3}/.test(line) && /(?:\d+[.,]\d{2})/.test(line) && !/(subtotal|tax|vat|total|amount due)/i.test(line));
+  if (itemLine) return cleanValue(itemLine.replace(/\s+\d+(?:[.,]\d{2})?(?:\s+\d+(?:[.,]\d{2})?)*\s*$/, ''));
+  return cleanValue(lines.find((line) => /\b(service|subscription|consulting|software|equipment|supplies|freight|rent|fee|product|goods)\b/i.test(line) && !/(subtotal|tax|total)/i.test(line)) || '');
+}
+function cleanDescription(value: string) {
+  const cleaned = cleanValue(value.replace(/\b(?:qty|quantity|unit price|rate|amount)\b.*$/i, ''));
+  if (cleaned.length < 3 || /^(?:description|item|service|particulars|details)$/i.test(cleaned) || /^(?:qty|quantity|unit price|rate|amount)$/i.test(cleaned)) return '';
+  return cleaned.slice(0, 240);
+}
 function labeledAmount(lines: string[], labels: string[]) {
   const labelPattern = new RegExp(`\\b(?:${labels.map(escapeRegExp).join('|')})\\b`, 'i');
   for (const line of lines) { if (!labelPattern.test(line)) continue; const values = extractAmounts(line.replace(labelPattern, '')); if (values.length) return values[values.length - 1].toFixed(2); }
