@@ -1,15 +1,12 @@
-const rows = [
-  ['TRX-2026-0841', '28 Aug 2026', 'Expense', 'INV-ACS-8821', 'Arden Cloud Services', 'Technology', 'Software & subscriptions', '8420.00', 'Pending'],
-  ['TRX-2026-0840', '28 Aug 2026', 'Income', 'NS-INV-2048', 'Northline Retail Co.', 'Commercial', 'Product revenue', '24800.00', 'Paid'],
-  ['TRX-2026-0839', '27 Aug 2026', 'Expense', 'FS-0927', 'Fieldstone Studio', 'Marketing', 'Marketing services', '3950.00', 'Missing Document'],
-  ['TRX-2026-0838', '27 Aug 2026', 'Expense', 'JL-44710', 'Juniper Logistics', 'Operations', 'Freight & delivery', '6284.00', 'Approved'],
-  ['TRX-2026-0837', '26 Aug 2026', 'Income', 'NS-INV-2039', 'Aurora Hospitality', 'Commercial', 'Service revenue', '18600.00', 'Overdue'],
-  ['TRX-2026-0836', '25 Aug 2026', 'Expense', 'BR-1811', 'Blue Ridge Facilities', 'Operations', 'Facilities', '12480.00', 'Paid'],
-  ['TRX-2026-0835', '25 Aug 2026', 'Income', 'NS-INV-2035', 'Solace Health Group', 'Commercial', 'Service revenue', '31200.00', 'Paid'],
-];
+import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { listTransactionRecords } from '@/db/transaction-register';
 
 export async function GET() {
-  const headers = ['Transaction ID', 'Date', 'Type', 'Reference', 'Counterparty', 'Department', 'Category', 'Amount (USD)', 'Status'];
+  const user = await getChatGPTUser();
+  if (!user) return new Response('Authentication required.', { status: 401 });
+  const transactions = await listTransactionRecords();
+  const headers = ['Transaction ID', 'Date', 'Type', 'Reference', 'Counterparty', 'Department', 'Category', 'Amount', 'Currency', 'Status'];
+  const rows = transactions.map((row) => [row.id, row.date, row.type, row.reference, row.party, row.department, row.category, row.amount, row.currency || 'USD', row.status]);
   const csv = [headers, ...rows].map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(',')).join('\r\n');
-  return new Response(`\uFEFF${csv}`, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="ledgerflow-transactions-2026-08.csv"', 'Cache-Control': 'no-store' } });
+  return new Response(`\uFEFF${csv}`, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="ledgerflow-transactions.csv"', 'Cache-Control': 'no-store' } });
 }

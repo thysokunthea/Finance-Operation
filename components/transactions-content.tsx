@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, CalendarDays, CheckCircle2, ChevronRight, Download, FileCheck2, Filter, Pencil, Plus, ScanLine, Search, ShieldCheck, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,7 @@ const badgeStyles: Record<string, string> = {
 
 export function TransactionsContent({ type = 'All' }: { type?: 'All' | 'Income' | 'Expense' }) {
   const [records, setRecords] = useState<TransactionRow[]>(initialRows);
+  const [loadingRecords, setLoadingRecords] = useState(true);
   const [query, setQuery] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('search') || '' : '');
   const [status, setStatus] = useState('All statuses');
   const [dialogOpen, setDialogOpen] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('new') === '1');
@@ -52,6 +53,25 @@ export function TransactionsContent({ type = 'All' }: { type?: 'All' | 'Income' 
   const title = type === 'Income' ? 'Income register' : type === 'Expense' ? 'Expense register' : 'Transaction register';
   const copy = type === 'Income' ? 'Track recognized revenue, collections, and supporting invoices.' : type === 'Expense' ? 'Control operating spend, evidence, approvals, and payment status.' : 'Review, trace, and control all financial activity.';
 
+  useEffect(() => {
+    let active = true;
+    fetch('/api/transactions', { cache: 'no-store' })
+      .then(async (response) => {
+        const payload = await response.json() as { transactions?: TransactionRow[]; error?: string };
+        if (!response.ok) throw new Error(payload.error || 'Transactions could not be loaded.');
+        return payload.transactions || [];
+      })
+      .then((rows) => {
+        if (!active) return;
+        setRecords(rows);
+        const firstVisible = type === 'All' ? rows[0] : rows.find((row) => row.type === type);
+        setSelected(firstVisible || null);
+      })
+      .catch((loadError) => { if (active) setNotice(loadError instanceof Error ? loadError.message : 'Transactions could not be loaded.'); })
+      .finally(() => { if (active) setLoadingRecords(false); });
+    return () => { active = false; };
+  }, [type]);
+
   const openNewTransaction = () => {
     setEditingId(null); setDraft(blankDraft(type)); setNotice(''); setDialogOpen(true);
   };
@@ -69,7 +89,7 @@ export function TransactionsContent({ type = 'All' }: { type?: 'All' | 'Income' 
     setNotice(''); setDialogOpen(true);
   };
 
-  const saveTransaction = (event: React.FormEvent) => {
+  const saveTransaction = async (event: React.FormEvent) => {
     event.preventDefault();
     const numericAmount = Number(draft.amount);
     if (!draft.party.trim() || !draft.reference.trim() || !draft.date.trim() || !draft.description.trim() || !draft.category.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0) {
@@ -78,17 +98,26 @@ export function TransactionsContent({ type = 'All' }: { type?: 'All' | 'Income' 
     const currency = draft.currency || 'USD';
     const existing = editingId ? records.find((row) => row.id === editingId) : undefined;
     const record: TransactionRow = {
-      id: existing?.id || `TRX-2026-${String(842 + records.length).padStart(4, '0')}`, date: draft.date, type: draft.type,
+      id: existing?.id || `TRX-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, date: draft.date, type: draft.type,
       reference: draft.reference.trim(), party: draft.party.trim(), department: draft.department,
       category: draft.category.trim(), amount: new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(numericAmount),
       status: 'Pending', approval: 'Finance review', owner: existing?.owner || 'Jordan Lee', dueDate: draft.dueDate, currency,
       subtotal: draft.subtotal, tax: draft.tax, description: draft.description, paymentMethod: draft.paymentMethod,
       purchaseOrder: draft.purchaseOrder, documentType: draft.documentType,
     };
-    setRecords((current) => existing ? current.map((row) => row.id === record.id ? record : row) : [record, ...current]);
-    setSelected(record); setDialogOpen(false);
-    setNotice(existing ? `${record.id} updated and returned to Pending finance review.` : `${record.id} saved as Pending.`);
-    setEditingId(null); setDraft(blankDraft(type));
+    setNotice('Saving transaction…');
+    try {
+      const response = await fetch('/api/transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record) });
+      const payload = await response.json() as { transaction?: TransactionRow; error?: string };
+      if (!response.ok || !payload.transaction) throw new Error(payload.error || 'Transaction could not be saved.');
+      const saved = payload.transaction;
+      setRecords((current) => existing ? current.map((row) => row.id === saved.id ? saved : row) : [saved, ...current]);
+      setSelected(saved); setDialogOpen(false);
+      setNotice(existing ? `${saved.id} updated and returned to Pending finance review.` : `${saved.id} saved permanently as Pending.`);
+      setEditingId(null); setDraft(blankDraft(type));
+    } catch (saveError) {
+      setNotice(saveError instanceof Error ? saveError.message : 'Transaction could not be saved.');
+    }
   };
 
   const useScannedData = (scanned: ScannedTransaction) => {
@@ -101,13 +130,13 @@ export function TransactionsContent({ type = 'All' }: { type?: 'All' | 'Income' 
       <div><p className="mb-1 text-xs text-muted-foreground">Finance / {type === 'All' ? 'Transactions' : type}</p><h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1><p className="mt-1 text-sm text-muted-foreground">{copy}</p></div>
       <div className="flex flex-wrap gap-2"><a href="/api/transactions/export" download className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-input bg-card px-3 text-sm font-medium shadow-xs transition-colors hover:bg-muted"><Download className="size-4" /> Export</a><Button variant="outline" className="bg-card" onClick={() => setScannerMode('upload')} title="Upload or drop a PNG, JPG, or PDF"><FileCheck2 /> Scan document</Button><Button variant="outline" className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10" onClick={() => setScannerMode('camera')} title="Capture a document with your phone or live camera"><ScanLine /> OCR Import</Button><Button onClick={openNewTransaction}><Plus /> New {type === 'All' ? 'transaction' : type.toLowerCase()}</Button></div>
     </div>
-    {notice ? <div role="status" className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${notice.includes('required') ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}><CheckCircle2 className="size-4" />{notice}</div> : null}
+    {notice ? <div role="status" className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${/(?:required|could not|failed|unavailable|missing)/i.test(notice) ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}><CheckCircle2 className="size-4" />{notice}</div> : null}
     {scannerMode ? <DocumentScanner mode={scannerMode} onClose={() => setScannerMode(null)} onApply={useScannedData} /> : null}
 
     <Card className="gap-0 shadow-[0_1px_2px_rgb(15_23_42/3%)]"><CardContent className="p-3"><div className="flex flex-col gap-2 md:flex-row"><div className="relative min-w-0 flex-1"><Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search ID, reference, counterparty or category" className="h-9 pl-8" /></div><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-9 rounded-lg border bg-card px-3 text-sm outline-none"><option>All statuses</option><option>Paid</option><option>Pending</option><option>Approved</option><option>Overdue</option><option>Missing Document</option></select><Button variant="outline" className="h-9" onClick={() => setShowDatePicker((current) => !current)} aria-expanded={showDatePicker}><CalendarDays /> {dateFrom || dateTo ? `${formatPickerDate(dateFrom) || 'Start'} – ${formatPickerDate(dateTo) || 'Today'}` : 'All dates'}</Button><Button variant="outline" className="h-9" onClick={() => setShowAdvanced((current) => !current)} aria-expanded={showAdvanced}><Filter /> {showAdvanced ? 'Hide filters' : 'More filters'}</Button></div>{showDatePicker ? <div className="mt-3 grid gap-3 border-t pt-3 sm:grid-cols-[140px_1fr_1fr_auto] sm:items-end"><label className="text-xs font-medium">Quick year<select value={dateFrom.endsWith('-01-01') && dateTo === `${dateFrom.slice(0, 4)}-12-31` ? dateFrom.slice(0, 4) : ''} onChange={(event) => { const year = event.target.value; if (year) { setDateFrom(`${year}-01-01`); setDateTo(`${year}-12-31`); } }} className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"><option value="">Custom</option><option>2026</option><option>2027</option><option>2028</option><option>2029</option><option>2030</option></select></label><label className="text-xs font-medium">From<Input type="date" value={dateFrom} min="2020-01-01" max={dateTo || '2030-12-31'} onChange={(event) => setDateFrom(event.target.value)} className="mt-2" /></label><label className="text-xs font-medium">To<Input type="date" value={dateTo} min={dateFrom || '2020-01-01'} max="2030-12-31" onChange={(event) => setDateTo(event.target.value)} className="mt-2" /></label><Button variant="outline" onClick={() => { setDateFrom(''); setDateTo(''); }}>All dates</Button><p className="text-xs text-muted-foreground sm:col-span-4">Selectable dates are available through 31 December 2030.</p></div> : null}{showAdvanced ? <div className="mt-3 flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center"><label className="text-xs font-medium text-muted-foreground">Department</label><select value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)} className="h-9 rounded-lg border bg-card px-3 text-sm"><option>All departments</option><option>Operations</option><option>Commercial</option><option>Technology</option><option>Marketing</option></select><Button variant="ghost" className="sm:ml-auto" onClick={() => { setQuery(''); setStatus('All statuses'); setDepartmentFilter('All departments'); setDateFrom('2026-08-01'); setDateTo('2026-08-31'); }}>Reset filters</Button></div> : null}</CardContent></Card>
 
     <div className="grid min-h-[590px] gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <Card className="min-w-0 gap-0"><CardHeader className="border-b py-4"><CardTitle className="flex items-center justify-between"><span>{filtered.length} transactions</span><span className="text-xs font-normal text-muted-foreground">Finance register</span></CardTitle></CardHeader><CardContent className="px-2 pb-2"><Table><TableHeader><TableRow><TableHead>Transaction</TableHead><TableHead>Counterparty</TableHead><TableHead className="hidden lg:table-cell">Department</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="w-8" /></TableRow></TableHeader><TableBody>{filtered.map((row) => <TableRow key={row.id} onClick={() => setSelected(row)} data-state={selected?.id === row.id ? 'selected' : undefined} className="cursor-pointer"><TableCell><p className="font-medium">{row.id}</p><p className="text-[11px] text-muted-foreground">{row.date} · {row.type}</p></TableCell><TableCell><p>{row.party}</p><p className="text-[11px] text-muted-foreground">{row.reference}</p></TableCell><TableCell className="hidden text-muted-foreground lg:table-cell">{row.department}</TableCell><TableCell><Badge variant="outline" className={badgeStyles[row.status]}>{row.status}</Badge></TableCell><TableCell className="text-right font-mono text-xs font-semibold">{row.amount}</TableCell><TableCell><ChevronRight className="size-4 text-muted-foreground" /></TableCell></TableRow>)}</TableBody></Table>{filtered.length === 0 ? <div className="grid min-h-56 place-items-center text-center"><div><Search className="mx-auto mb-2 size-7 text-muted-foreground" /><p className="font-medium">{records.length === 0 ? 'No transactions in this register' : 'No matching transactions'}</p><p className="mt-1 text-sm text-muted-foreground">{records.length === 0 ? 'Create, scan, or OCR-import a transaction.' : 'Adjust the search or status filter.'}</p></div></div> : null}</CardContent></Card>
+      <Card className="min-w-0 gap-0"><CardHeader className="border-b py-4"><CardTitle className="flex items-center justify-between"><span>{loadingRecords ? 'Loading transactions…' : `${filtered.length} transactions`}</span><span className="text-xs font-normal text-muted-foreground">Finance register</span></CardTitle></CardHeader><CardContent className="px-2 pb-2"><Table><TableHeader><TableRow><TableHead>Transaction</TableHead><TableHead>Counterparty</TableHead><TableHead className="hidden lg:table-cell">Department</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="w-8" /></TableRow></TableHeader><TableBody>{filtered.map((row) => <TableRow key={row.id} onClick={() => setSelected(row)} data-state={selected?.id === row.id ? 'selected' : undefined} className="cursor-pointer"><TableCell><p className="font-medium">{row.id}</p><p className="text-[11px] text-muted-foreground">{row.date} · {row.type}</p></TableCell><TableCell><p>{row.party}</p><p className="text-[11px] text-muted-foreground">{row.reference}</p></TableCell><TableCell className="hidden text-muted-foreground lg:table-cell">{row.department}</TableCell><TableCell><Badge variant="outline" className={badgeStyles[row.status]}>{row.status}</Badge></TableCell><TableCell className="text-right font-mono text-xs font-semibold">{row.amount}</TableCell><TableCell><ChevronRight className="size-4 text-muted-foreground" /></TableCell></TableRow>)}</TableBody></Table>{!loadingRecords && filtered.length === 0 ? <div className="grid min-h-56 place-items-center text-center"><div><Search className="mx-auto mb-2 size-7 text-muted-foreground" /><p className="font-medium">{records.length === 0 ? 'No transactions in this register' : 'No matching transactions'}</p><p className="mt-1 text-sm text-muted-foreground">{records.length === 0 ? 'Create, scan, or OCR-import a transaction.' : 'Adjust the search or status filter.'}</p></div></div> : null}</CardContent></Card>
 
       {selected ? <Card className="h-fit gap-0 xl:sticky xl:top-20"><CardHeader className="border-b py-4"><div><p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-muted-foreground">Transaction detail</p><CardTitle className="mt-1">{selected.id}</CardTitle></div></CardHeader><CardContent className="space-y-5 p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-muted-foreground">Total amount</p><p className="metric-value mt-1 text-2xl font-semibold">{selected.amount}</p></div><Badge variant="outline" className={badgeStyles[selected.status]}>{selected.status}</Badge></div><dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-xs"><Detail label="Counterparty" value={selected.party} /><Detail label="Reference" value={selected.reference} /><Detail label="Issue date" value={selected.date} /><Detail label="Department" value={selected.department} /><Detail label="Category" value={selected.category} /><Detail label="Responsible" value={selected.owner} /><Detail label="Approval" value={selected.approval} />{selected.dueDate ? <Detail label="Due date" value={selected.dueDate} /> : null}{selected.tax ? <Detail label="Tax / VAT" value={`${selected.currency || 'USD'} ${selected.tax}`} /> : null}{selected.paymentMethod ? <Detail label="Payment method" value={selected.paymentMethod} /> : null}{selected.purchaseOrder ? <Detail label="Purchase order" value={selected.purchaseOrder} /> : null}</dl>{selected.description ? <div className="rounded-xl border bg-muted/20 p-3 text-xs"><p className="text-muted-foreground">Description</p><p className="mt-1">{selected.description}</p></div> : null}<div className="rounded-xl border bg-muted/30 p-3"><div className="flex items-center gap-2 text-xs font-semibold"><ArrowLeftRight className="size-4 text-primary" /> Balanced journal</div><div className="mt-3 flex justify-between text-xs"><span className="text-muted-foreground">Debit</span><span className="font-mono">{selected.amount}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-muted-foreground">Credit</span><span className="font-mono">{selected.amount}</span></div></div><div className="space-y-2"><div className="flex items-center gap-2 text-xs"><FileCheck2 className="size-4 text-emerald-600" /><span>Supporting document linked</span></div><div className="flex items-center gap-2 text-xs"><ShieldCheck className="size-4 text-emerald-600" /><span>Audit trail intact</span></div></div><div className="grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => { window.location.href = '/documents'; }}>View documents</Button><Button onClick={() => openEditTransaction(selected)}><Pencil /> Edit transaction</Button></div></CardContent></Card> : <Card className="h-fit gap-0 xl:sticky xl:top-20"><CardHeader className="border-b py-4"><CardTitle>Transaction detail</CardTitle></CardHeader><CardContent className="grid min-h-56 place-items-center p-6 text-center"><div><FileCheck2 className="mx-auto mb-3 size-8 text-muted-foreground" /><p className="font-medium">No transaction selected</p><p className="mt-1 text-sm text-muted-foreground">Create or import a transaction to review its details.</p></div></CardContent></Card>}
     </div>
