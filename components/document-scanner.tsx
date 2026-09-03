@@ -16,8 +16,13 @@ export type ScannedTransaction = {
 
 export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onApply: (result: ScannedTransaction) => void }) {
   const cameraRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
+  const [showCameraFallback, setShowCameraFallback] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Take a clear photo of a receipt, invoice, or payment document.');
   const [error, setError] = useState('');
@@ -25,6 +30,10 @@ export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onA
   const [result, setResult] = useState<ScannedTransaction | null>(null);
 
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+  useEffect(() => () => { streamRef.current?.getTracks().forEach((track) => track.stop()); }, []);
+  useEffect(() => {
+    if (cameraActive && videoRef.current && streamRef.current) videoRef.current.srcObject = streamRef.current;
+  }, [cameraActive]);
 
   const chooseFile = (selected?: File) => {
     if (!selected) return;
@@ -36,16 +45,54 @@ export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onA
     setStatus(`${selected.name} is ready to scan.`);
   };
 
-  const openCamera = () => {
+  const openPhoneCamera = () => {
     if (cameraRef.current) cameraRef.current.value = '';
     cameraRef.current?.click();
   };
 
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null; setCameraActive(false);
+  };
+
+  const startCamera = async () => {
+    setError(''); setShowCameraFallback(false); setCameraStarting(true);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraStarting(false); setShowCameraFallback(true);
+      setError('Live camera is not available in this browser. Tap “Open phone camera” below.');
+      return;
+    }
+    try {
+      stopCamera();
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      streamRef.current = stream; setCameraActive(true); setStatus('Camera ready. Keep the full document inside the frame.');
+    } catch {
+      setShowCameraFallback(true);
+      setError('Camera access was blocked or unavailable. Allow camera permission, or tap “Open phone camera” below.');
+    } finally { setCameraStarting(false); }
+  };
+
+  const capturePhoto = async () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) { setError('The camera is still starting. Wait a moment and try again.'); return; }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    if (!context) { setError('The camera image could not be captured.'); return; }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.94));
+    if (!blob) { setError('The camera image could not be captured.'); return; }
+    stopCamera(); chooseFile(new File([blob], `camera-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+  };
+
+  const closeScanner = () => { stopCamera(); onClose(); };
+
   const captureAnother = () => {
+    stopCamera();
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setFile(null); setPreviewUrl(''); setResult(null); setRawText(''); setProgress(0); setError('');
     setStatus('Take a clear photo of a receipt, invoice, or payment document.');
-    window.setTimeout(openCamera, 0);
+    void startCamera();
   };
 
   const scan = async () => {
@@ -84,16 +131,15 @@ export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onA
   };
 
   return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-0 backdrop-blur-sm sm:p-4">
-    <button type="button" aria-label="Close document scanner" className="absolute inset-0" onClick={onClose} />
+    <button type="button" aria-label="Close document scanner" className="absolute inset-0" onClick={closeScanner} />
     <section aria-label="OCR import transaction document" className="relative z-10 h-[100dvh] w-full max-w-4xl overflow-y-auto border bg-card shadow-2xl sm:h-auto sm:max-h-[92vh] sm:rounded-2xl">
-      <header className="sticky top-0 z-10 flex items-start justify-between border-b bg-card p-4 sm:p-5"><div className="flex gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><ScanLine className="size-5" /></span><div><h2 className="text-lg font-semibold sm:text-xl">Intelligent OCR camera scan</h2><p className="mt-1 text-xs text-muted-foreground">Take a photo with your phone camera · maximum 20 MB</p></div></div><Button type="button" variant="ghost" size="icon" aria-label="Close scanner" onClick={onClose}><X /></Button></header>
+      <header className="sticky top-0 z-10 flex items-start justify-between border-b bg-card p-4 sm:p-5"><div className="flex gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><ScanLine className="size-5" /></span><div><h2 className="text-lg font-semibold sm:text-xl">Intelligent OCR camera scan</h2><p className="mt-1 text-xs text-muted-foreground">Use the live rear camera to capture your document</p></div></div><Button type="button" variant="ghost" size="icon" aria-label="Close scanner" onClick={closeScanner}><X /></Button></header>
       <div className="space-y-4 p-4 sm:space-y-5 sm:p-5">
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={(event) => chooseFile(event.target.files?.[0])} />
-        <Button type="button" className="h-12 w-full text-base" onClick={openCamera}><Camera /> Take photo / Scan camera</Button>
+        <Button type="button" className="h-12 w-full text-base" onClick={cameraActive ? capturePhoto : startCamera} disabled={cameraStarting}><Camera /> {cameraStarting ? 'Starting camera…' : cameraActive ? 'Capture document' : file ? 'Take another photo' : 'Start camera'}</Button>
         <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800"><strong>Camera tip:</strong> Place the full document inside the frame, keep the phone steady, and avoid shadows or glare.</div>
-        <div className="grid min-h-40 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center">
-          {previewUrl ? <img src={previewUrl} alt="Camera document preview" className="max-h-48 rounded-lg object-contain" /> : <div><Camera className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">Ready to scan from your camera</p><p className="mt-1 text-xs text-muted-foreground">Invoices, receipts, purchase orders, and payment evidence</p></div>}
-        </div>
+        {cameraActive ? <div className="overflow-hidden rounded-2xl border-2 border-primary/40 bg-slate-950"><video ref={videoRef} autoPlay muted playsInline aria-label="Live document camera preview" className="max-h-[52vh] w-full object-contain" /><div className="flex items-center justify-center border-t border-white/15 p-3"><Button type="button" size="lg" onClick={capturePhoto}><Camera /> Capture document</Button></div></div> : previewUrl ? <div className="grid min-h-40 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center"><img src={previewUrl} alt="Camera document preview" className="max-h-64 rounded-lg object-contain" /></div> : <button type="button" onClick={startCamera} disabled={cameraStarting} className="grid min-h-40 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center transition hover:border-primary/50 hover:bg-primary/[0.03]"><div><Camera className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">Tap here to start the camera</p><p className="mt-1 text-xs text-muted-foreground">Then capture the full invoice, receipt, or payment document</p></div></button>}
+        {showCameraFallback ? <Button type="button" variant="outline" className="h-11 w-full" onClick={openPhoneCamera}><Camera /> Open phone camera</Button> : null}
         {file ? <div className="flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center"><span className="grid size-9 place-items-center rounded-lg bg-muted text-primary"><FileImage className="size-4" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">Camera photo ready</p><p className="text-xs text-muted-foreground">{file.type} · {(file.size / 1024).toFixed(0)} KB</p></div><Button type="button" onClick={scan} disabled={progress > 0 && progress < 100}>{progress > 0 && progress < 100 ? <Loader2 className="animate-spin" /> : <ScanLine />} {progress > 0 && progress < 100 ? 'Scanning…' : 'Scan document'}</Button></div> : null}
         {progress > 0 ? <div><div className="mb-2 flex justify-between text-xs"><span>{status}</span><span>{progress}%</span></div><Progress value={progress} /></div> : <p className="text-xs text-muted-foreground">Image cleanup and OCR happen in your browser. No accounting record is created until you review and save it.</p>}
         {error ? <div role="alert" className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><AlertCircle className="mt-0.5 size-4 shrink-0" />{error}</div> : null}
