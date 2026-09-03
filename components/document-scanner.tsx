@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, Camera, CheckCircle2, FileImage, Loader2, ScanLine, X } from 'lucide-react';
+import { AlertCircle, Camera, CheckCircle2, FileImage, FileText, Loader2, ScanLine, Upload, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,8 @@ export type ScannedTransaction = {
   confidence: number; warnings: string[];
 };
 
-export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onApply: (result: ScannedTransaction) => void }) {
+export function DocumentScanner({ mode, onClose, onApply }: { mode: 'upload' | 'camera'; onClose: () => void; onApply: (result: ScannedTransaction) => void }) {
+  const uploadRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -24,7 +25,7 @@ export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onA
   const [cameraStarting, setCameraStarting] = useState(false);
   const [showCameraFallback, setShowCameraFallback] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState('Take a clear photo of a receipt, invoice, or payment document.');
+  const [status, setStatus] = useState(mode === 'upload' ? 'Choose or drop a receipt, invoice, or payment document.' : 'Take a clear photo of a receipt, invoice, or payment document.');
   const [error, setError] = useState('');
   const [rawText, setRawText] = useState('');
   const [result, setResult] = useState<ScannedTransaction | null>(null);
@@ -38,11 +39,15 @@ export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onA
   const chooseFile = (selected?: File) => {
     if (!selected) return;
     setError(''); setResult(null); setRawText(''); setProgress(0);
-    if (!selected.type.startsWith('image/')) { setError('Unsupported camera image. Please take another photo.'); return; }
-    if (selected.size > 20 * 1024 * 1024) { setError('Photo is larger than 20 MB. Please reduce the camera resolution and try again.'); return; }
+    const lowerName = selected.name.toLowerCase();
+    const isImage = selected.type.startsWith('image/') || /\.(?:png|jpe?g)$/.test(lowerName);
+    const isPdf = selected.type === 'application/pdf' || lowerName.endsWith('.pdf');
+    const supported = isImage || (mode === 'upload' && isPdf);
+    if (!supported) { setError(mode === 'upload' ? 'Unsupported file. Upload a PNG, JPG, or PDF.' : 'Unsupported camera image. Please take another photo.'); return; }
+    if (selected.size > 20 * 1024 * 1024) { setError(mode === 'upload' ? 'File is larger than 20 MB. Choose a smaller document.' : 'Photo is larger than 20 MB. Please reduce the camera resolution and try again.'); return; }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setFile(selected); setPreviewUrl(selected.type.startsWith('image/') ? URL.createObjectURL(selected) : '');
-    setStatus(`${selected.name} is ready to scan.`);
+    setFile(selected); setPreviewUrl(isImage ? URL.createObjectURL(selected) : '');
+    setStatus(`${mode === 'camera' ? 'Camera photo' : selected.name} is ready to scan.`);
   };
 
   const openPhoneCamera = () => {
@@ -87,12 +92,13 @@ export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onA
 
   const closeScanner = () => { stopCamera(); onClose(); };
 
-  const captureAnother = () => {
+  const resetScanner = () => {
     stopCamera();
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setFile(null); setPreviewUrl(''); setResult(null); setRawText(''); setProgress(0); setError('');
-    setStatus('Take a clear photo of a receipt, invoice, or payment document.');
-    void startCamera();
+    setStatus(mode === 'upload' ? 'Choose or drop a receipt, invoice, or payment document.' : 'Take a clear photo of a receipt, invoice, or payment document.');
+    if (mode === 'camera') void startCamera();
+    else if (uploadRef.current) uploadRef.current.value = '';
   };
 
   const scan = async () => {
@@ -101,7 +107,33 @@ export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onA
     try {
       let text = '';
       const imageSources: HTMLCanvasElement[] = [];
-      imageSources.push(await prepareImage(file));
+      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        setStatus('Reading PDF pages…'); setProgress(10);
+        const pdfjs = await import('pdfjs-dist');
+        pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+        const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+        const pageCount = Math.min(pdf.numPages, 3);
+        for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+          const page = await pdf.getPage(pageNumber);
+          const content = await page.getTextContent();
+          const pageText = content.items.map((item) => {
+            if (!('str' in item)) return '';
+            return `${item.str}${'hasEOL' in item && item.hasEOL ? '\n' : ' '}`;
+          }).join('').trim();
+          text += `${pageText}\n`;
+          if (pageText.length < 40 && pageNumber <= 2) {
+            const viewport = page.getViewport({ scale: 2.25 });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+            const context = canvas.getContext('2d');
+            if (!context) throw new Error('Unable to prepare the PDF page.');
+            await page.render({ canvas, canvasContext: context, viewport }).promise;
+            imageSources.push(enhanceCanvas(canvas));
+          }
+        }
+      } else {
+        imageSources.push(await prepareImage(file));
+      }
 
       if (imageSources.length) {
         setStatus('Recognizing labels and values…'); setProgress(18);
@@ -133,14 +165,22 @@ export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onA
   return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-0 backdrop-blur-sm sm:p-4">
     <button type="button" aria-label="Close document scanner" className="absolute inset-0" onClick={closeScanner} />
     <section aria-label="OCR import transaction document" className="relative z-10 h-[100dvh] w-full max-w-4xl overflow-y-auto border bg-card shadow-2xl sm:h-auto sm:max-h-[92vh] sm:rounded-2xl">
-      <header className="sticky top-0 z-10 flex items-start justify-between border-b bg-card p-4 sm:p-5"><div className="flex gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><ScanLine className="size-5" /></span><div><h2 className="text-lg font-semibold sm:text-xl">Intelligent OCR camera scan</h2><p className="mt-1 text-xs text-muted-foreground">Use the live rear camera to capture your document</p></div></div><Button type="button" variant="ghost" size="icon" aria-label="Close scanner" onClick={closeScanner}><X /></Button></header>
+      <header className="sticky top-0 z-10 flex items-start justify-between border-b bg-card p-4 sm:p-5"><div className="flex gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><ScanLine className="size-5" /></span><div><h2 className="text-lg font-semibold sm:text-xl">{mode === 'upload' ? 'Scan document' : 'Intelligent OCR camera scan'}</h2><p className="mt-1 text-xs text-muted-foreground">{mode === 'upload' ? 'Drop or upload a PNG, JPG, or PDF · maximum 20 MB' : 'Use the live rear camera to capture your document'}</p></div></div><Button type="button" variant="ghost" size="icon" aria-label="Close scanner" onClick={closeScanner}><X /></Button></header>
       <div className="space-y-4 p-4 sm:space-y-5 sm:p-5">
-        <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={(event) => chooseFile(event.target.files?.[0])} />
-        <Button type="button" className="h-12 w-full text-base" onClick={cameraActive ? capturePhoto : startCamera} disabled={cameraStarting}><Camera /> {cameraStarting ? 'Starting camera…' : cameraActive ? 'Capture document' : file ? 'Take another photo' : 'Start camera'}</Button>
-        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800"><strong>Camera tip:</strong> Place the full document inside the frame, keep the phone steady, and avoid shadows or glare.</div>
-        {cameraActive ? <div className="overflow-hidden rounded-2xl border-2 border-primary/40 bg-slate-950"><video ref={videoRef} autoPlay muted playsInline aria-label="Live document camera preview" className="max-h-[52vh] w-full object-contain" /><div className="flex items-center justify-center border-t border-white/15 p-3"><Button type="button" size="lg" onClick={capturePhoto}><Camera /> Capture document</Button></div></div> : previewUrl ? <div className="grid min-h-40 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center"><img src={previewUrl} alt="Camera document preview" className="max-h-64 rounded-lg object-contain" /></div> : <button type="button" onClick={startCamera} disabled={cameraStarting} className="grid min-h-40 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center transition hover:border-primary/50 hover:bg-primary/[0.03]"><div><Camera className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">Tap here to start the camera</p><p className="mt-1 text-xs text-muted-foreground">Then capture the full invoice, receipt, or payment document</p></div></button>}
-        {showCameraFallback ? <Button type="button" variant="outline" className="h-11 w-full" onClick={openPhoneCamera}><Camera /> Open phone camera</Button> : null}
-        {file ? <div className="flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center"><span className="grid size-9 place-items-center rounded-lg bg-muted text-primary"><FileImage className="size-4" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">Camera photo ready</p><p className="text-xs text-muted-foreground">{file.type} · {(file.size / 1024).toFixed(0)} KB</p></div><Button type="button" onClick={scan} disabled={progress > 0 && progress < 100}>{progress > 0 && progress < 100 ? <Loader2 className="animate-spin" /> : <ScanLine />} {progress > 0 && progress < 100 ? 'Scanning…' : 'Scan document'}</Button></div> : null}
+        {mode === 'upload' ? <>
+          <input ref={uploadRef} type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg,.pdf,application/pdf" className="sr-only" onChange={(event) => chooseFile(event.target.files?.[0])} />
+          <Button type="button" className="h-12 w-full text-base" onClick={() => uploadRef.current?.click()}><Upload /> Upload file</Button>
+          <button type="button" onClick={() => uploadRef.current?.click()} onDrop={(event) => { event.preventDefault(); chooseFile(event.dataTransfer.files?.[0]); }} onDragOver={(event) => event.preventDefault()} className="grid min-h-44 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center transition hover:border-primary/50 hover:bg-primary/[0.03]">
+            {previewUrl ? <img src={previewUrl} alt="Uploaded document preview" className="max-h-64 rounded-lg object-contain" /> : file ? <div><FileText className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">{file.name}</p><p className="mt-1 text-xs text-muted-foreground">PDF ready to scan</p></div> : <div><Upload className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">Drop a document here or tap to upload</p><p className="mt-1 text-xs text-muted-foreground">PNG, JPG, or PDF · maximum 20 MB</p></div>}
+          </button>
+        </> : <>
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={(event) => chooseFile(event.target.files?.[0])} />
+          <Button type="button" className="h-12 w-full text-base" onClick={cameraActive ? capturePhoto : startCamera} disabled={cameraStarting}><Camera /> {cameraStarting ? 'Starting camera…' : cameraActive ? 'Capture document' : file ? 'Take another photo' : 'Start camera'}</Button>
+          <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800"><strong>Camera tip:</strong> Place the full document inside the frame, keep the phone steady, and avoid shadows or glare.</div>
+          {cameraActive ? <div className="overflow-hidden rounded-2xl border-2 border-primary/40 bg-slate-950"><video ref={videoRef} autoPlay muted playsInline aria-label="Live document camera preview" className="max-h-[52vh] w-full object-contain" /><div className="flex items-center justify-center border-t border-white/15 p-3"><Button type="button" size="lg" onClick={capturePhoto}><Camera /> Capture document</Button></div></div> : previewUrl ? <div className="grid min-h-40 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center"><img src={previewUrl} alt="Camera document preview" className="max-h-64 rounded-lg object-contain" /></div> : <button type="button" onClick={startCamera} disabled={cameraStarting} className="grid min-h-40 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center transition hover:border-primary/50 hover:bg-primary/[0.03]"><div><Camera className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">Tap here to start the camera</p><p className="mt-1 text-xs text-muted-foreground">Then capture the full invoice, receipt, or payment document</p></div></button>}
+          {showCameraFallback ? <Button type="button" variant="outline" className="h-11 w-full" onClick={openPhoneCamera}><Camera /> Open phone camera</Button> : null}
+        </>}
+        {file ? <div className="flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center"><span className="grid size-9 place-items-center rounded-lg bg-muted text-primary">{file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') ? <FileText className="size-4" /> : <FileImage className="size-4" />}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{mode === 'camera' ? 'Camera photo ready' : file.name}</p><p className="text-xs text-muted-foreground">{file.type || 'Document'} · {(file.size / 1024).toFixed(0)} KB</p></div><Button type="button" onClick={scan} disabled={progress > 0 && progress < 100}>{progress > 0 && progress < 100 ? <Loader2 className="animate-spin" /> : <ScanLine />} {progress > 0 && progress < 100 ? 'Scanning…' : 'Scan document'}</Button></div> : null}
         {progress > 0 ? <div><div className="mb-2 flex justify-between text-xs"><span>{status}</span><span>{progress}%</span></div><Progress value={progress} /></div> : <p className="text-xs text-muted-foreground">Image cleanup and OCR happen in your browser. No accounting record is created until you review and save it.</p>}
         {error ? <div role="alert" className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><AlertCircle className="mt-0.5 size-4 shrink-0" />{error}</div> : null}
         {result ? <div className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50/45 p-4">
@@ -162,7 +202,7 @@ export function DocumentScanner({ onClose, onApply }: { onClose: () => void; onA
             <label className="text-xs font-medium sm:col-span-2 lg:col-span-3">Description<textarea value={result.description} onChange={(event) => setResult({ ...result, description: event.target.value })} rows={2} className="mt-2 w-full rounded-lg border bg-card px-3 py-2 text-sm" /></label>
           </div>
           <details className="rounded-xl border bg-card p-3"><summary className="cursor-pointer text-xs font-medium">View recognized text</summary><pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap text-[11px] text-muted-foreground">{rawText}</pre></details>
-          <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={captureAnother}>Take another photo</Button><Button type="button" onClick={() => onApply(result)}>Review and record</Button></div>
+          <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={resetScanner}>{mode === 'upload' ? 'Scan another file' : 'Take another photo'}</Button><Button type="button" onClick={() => onApply(result)}>Review and record</Button></div>
         </div> : null}
       </div>
     </section>
