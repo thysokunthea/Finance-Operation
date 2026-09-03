@@ -58,6 +58,14 @@ export async function saveTransactionRecord(record: TransactionRecord, user: Cha
   const departmentId = `department-${stableKey(record.department.toLowerCase())}`;
   const existing = await env.DB.prepare('SELECT * FROM transactions WHERE id = ? AND organization_id = ?')
     .bind(record.id, organizationId).first<Record<string, unknown>>();
+  if (!existing) {
+    const possibleDuplicates = await env.DB.prepare(`SELECT transaction_number, transaction_date FROM transactions
+      WHERE organization_id = ? AND reference_number = ? AND counterparty_id = ? AND total_minor = ?
+      AND posting_status != 'deleted' LIMIT 10`)
+      .bind(organizationId, record.reference, counterpartyId, totalMinor).all<{ transaction_number: string; transaction_date: string }>();
+    const duplicate = possibleDuplicates.results.find((item) => normalizeDate(item.transaction_date) === normalizeDate(record.date));
+    if (duplicate) throw new Error(`Possible duplicate of ${duplicate.transaction_number}. Open the existing transaction instead of saving it again.`);
+  }
 
   const statements = [
     env.DB.prepare(`INSERT INTO organizations (id, name, code, functional_currency, timezone, fiscal_year_start_month)
@@ -109,9 +117,12 @@ function formatMoney(minor: number, currency: string) {
 function normalizeDate(value: string) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const match = value.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
-  if (!match) return value;
-  const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(match[2].slice(0, 3));
-  return month >= 0 ? `${match[3]}-${String(month + 1).padStart(2, '0')}-${match[1].padStart(2, '0')}` : value;
+  if (match) {
+    const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(match[2].slice(0, 3));
+    if (month >= 0) return `${match[3]}-${String(month + 1).padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+  }
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : value;
 }
 
 function formatDate(value: string) {
