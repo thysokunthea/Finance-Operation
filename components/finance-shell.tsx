@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BarChart3, Bell, Bot, Building2, CalendarCheck2, CheckSquare2, ChevronDown, CircleDollarSign, ClipboardCheck, FileBarChart, FileText, FolderOpen, HandCoins, LayoutDashboard, Menu, ReceiptText, Search, Settings, Upload, WalletCards, X } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +21,7 @@ const primaryNav = [
 ];
 const workflowNav = [
   { key: 'tasks', label: 'My Tasks', icon: CheckSquare2, href: '/tasks' },
-  { key: 'approvals', label: 'Approvals', icon: ClipboardCheck, href: '/approvals', count: 8 },
+  { key: 'approvals', label: 'Approvals', icon: ClipboardCheck, href: '/approvals' },
   { key: 'documents', label: 'Documents', icon: FolderOpen, href: '/documents' },
   { key: 'reports', label: 'Reports', icon: FileBarChart, href: '/reports' },
   { key: 'import', label: 'Data Import', icon: Upload, href: '/import' },
@@ -31,6 +31,17 @@ const workflowNav = [
 
 export function FinanceShell({ children, active, userName, userEmail, demo }: { children: React.ReactNode; active: NavKey; userName: string; userEmail: string; demo: boolean }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [approvalCount, setApprovalCount] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => fetch('/api/approvals', { cache: 'no-store' })
+      .then(async (response) => response.ok ? await response.json() as { approvals?: unknown[] } : { approvals: [] })
+      .then((payload) => { if (active) setApprovalCount(payload.approvals?.length || 0); })
+      .catch(() => undefined);
+    refresh();
+    window.addEventListener('ledgerflow-approvals-changed', refresh);
+    return () => { active = false; window.removeEventListener('ledgerflow-approvals-changed', refresh); };
+  }, []);
   const initials = userName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
   return (
     <div className="min-h-screen bg-background text-foreground lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
@@ -47,7 +58,7 @@ export function FinanceShell({ children, active, userName, userEmail, demo }: { 
               <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">Finance</p>
               <div className="space-y-1">{primaryNav.map((item) => { const Icon = item.icon; const isActive = item.key === active; return <a key={item.key} href={item.href} aria-current={isActive ? 'page' : undefined} onClick={() => setMobileOpen(false)} className={cn('flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors', isActive ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white')}><Icon className={cn('size-4', isActive && 'text-sidebar-primary')} /><span>{item.label}</span></a>; })}</div>
               <p className="mb-2 mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">Workflow</p>
-              <div className="space-y-1">{workflowNav.map((item) => { const Icon = item.icon; const isActive = item.key === active; return <a key={item.key} href={item.href} aria-current={isActive ? 'page' : undefined} onClick={() => setMobileOpen(false)} className={cn('flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors', isActive ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white')}><Icon className={cn('size-4', isActive && 'text-sidebar-primary')} /><span>{item.label}</span>{item.count ? <span className="ml-auto rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{item.count}</span> : null}</a>; })}</div>
+              <div className="space-y-1">{workflowNav.map((item) => { const Icon = item.icon; const isActive = item.key === active; return <a key={item.key} href={item.href} aria-current={isActive ? 'page' : undefined} onClick={() => setMobileOpen(false)} className={cn('flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors', isActive ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white')}><Icon className={cn('size-4', isActive && 'text-sidebar-primary')} /><span>{item.label}</span>{item.key === 'approvals' && approvalCount > 0 ? <span className="ml-auto rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{approvalCount}</span> : null}</a>; })}</div>
               <p className="mb-2 mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">Administration</p>
               <a href="/settings" aria-current={active === 'settings' ? 'page' : undefined} onClick={() => setMobileOpen(false)} className={cn('flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors', active === 'settings' ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white')}><Settings className="size-4" /><span>Settings</span></a>
             </nav>
@@ -60,7 +71,7 @@ export function FinanceShell({ children, active, userName, userEmail, demo }: { 
           <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">Finance</p>
           <div className="space-y-1">{primaryNav.map((item) => { const Icon = item.icon; const isActive = item.key === active; return <a key={item.key} href={item.href} aria-current={isActive ? 'page' : undefined} className={cn('flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] transition-colors', isActive ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white')}><Icon className={cn('size-4', isActive && 'text-sidebar-primary')} /><span>{item.label}</span></a>; })}</div>
           <p className="mb-2 mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">Workflow</p>
-          <div className="space-y-1">{workflowNav.map((item) => { const Icon = item.icon; const isActive = item.key === active; return <a key={item.key} href={item.href} aria-current={isActive ? 'page' : undefined} className={cn('flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] transition-colors', isActive ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white')}><Icon className={cn('size-4', isActive && 'text-sidebar-primary')} /><span>{item.label}</span>{item.count ? <span className="ml-auto rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{item.count}</span> : null}</a>; })}</div>
+          <div className="space-y-1">{workflowNav.map((item) => { const Icon = item.icon; const isActive = item.key === active; return <a key={item.key} href={item.href} aria-current={isActive ? 'page' : undefined} className={cn('flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] transition-colors', isActive ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white')}><Icon className={cn('size-4', isActive && 'text-sidebar-primary')} /><span>{item.label}</span>{item.key === 'approvals' && approvalCount > 0 ? <span className="ml-auto rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{approvalCount}</span> : null}</a>; })}</div>
         </nav>
         <div className="border-t border-sidebar-border p-3"><a href="/settings" className={cn('mb-2 flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] transition-colors', active === 'settings' ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/65 hover:text-white')}><Settings className="size-4" /> Settings</a><div className="flex items-center gap-3 rounded-xl bg-white/[0.055] p-2.5"><Avatar size="sm" className="size-8"><AvatarFallback className="bg-sidebar-primary font-semibold text-sidebar-primary-foreground">{initials}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-white">{userName}</p><p className="truncate text-[10px] text-sidebar-foreground/45">Finance Manager</p></div><ChevronDown className="size-3.5 text-sidebar-foreground/45" /></div></div>
       </aside>

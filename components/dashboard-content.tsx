@@ -29,6 +29,7 @@ type DashboardTransaction = {
   category: string;
   amount: string;
   status: string;
+  approval: string;
 };
 
 const monthOptions = Array.from({ length: 60 }, (_, index) => {
@@ -132,7 +133,10 @@ export function DashboardContent() {
   });
   const budget = 365000;
   const budgetUsed = Math.min(100, Math.round((expenses / budget) * 100));
-  const visibleAttention = attentionFilter === 'all' ? attentionItems : attentionItems.filter((item) => item.type === attentionFilter);
+  const pendingApprovals = transactions.filter((transaction) => !['approved', 'rejected'].includes((transaction.approval || '').toLowerCase()));
+  const pendingApprovalValue = pendingApprovals.reduce((sum, transaction) => sum + amountValue(transaction.amount), 0);
+  const currentAttentionItems = attentionItems.map((item) => item.type === 'approvals' ? { ...item, title: `${pendingApprovals.length} request${pendingApprovals.length === 1 ? '' : 's'} awaiting review`, detail: `${money(pendingApprovalValue, true)} total value` } : item);
+  const visibleAttention = attentionFilter === 'all' ? currentAttentionItems : currentAttentionItems.filter((item) => item.type === attentionFilter);
   return (
     <div className="space-y-6">
       <section className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">

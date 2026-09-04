@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Bot, Check, CheckCircle2, ClipboardCheck, DollarSign, Save, Send, ShieldCheck, Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bot, CheckCircle2, ClipboardCheck, DollarSign, Save, Send, ShieldCheck, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,11 +22,7 @@ const budgetLines = [
   ['Commercial', '$96,000', '$57,600', '$8,400', '60%'],
   ['People', '$59,000', '$36,220', '$4,000', '61%'],
 ];
-const approvalSeed = [
-  { id: 'APR-0828', name: 'Arden Cloud renewal', owner: 'Mina Park', amount: '$18,400', status: 'Pending' },
-  { id: 'APR-0827', name: 'Juniper Logistics payment', owner: 'Sofia Chen', amount: '$6,284', status: 'Pending' },
-  { id: 'APR-0824', name: 'Fieldstone marketing invoice', owner: 'Jordan Lee', amount: '$3,950', status: 'Pending' },
-];
+type ApprovalItem = { id: string; name: string; owner: string; amount: string; status: string; reference: string; department: string; date: string };
 const closingSeed = ['Bank reconciliation', 'AR review', 'AP review', 'Expense review', 'Missing-document review', 'Outstanding advances', 'Budget review', 'Tax review', 'Accrual review', 'Management report'];
 
 export function ExtendedModuleContent({ kind }: { kind: Kind }) {
@@ -49,9 +45,35 @@ function Budgets() {
 }
 
 function Approvals() {
-  const [items, setItems] = useState(approvalSeed);
-  const approve = (id: string) => setItems((current) => current.map((item) => item.id === id ? { ...item, status: 'Approved' } : item));
-  return <div className="space-y-5"><Header crumb="Workflow / Approvals" title="Approval center" copy="Review evidence, coding, and authority before finance processes payment." /><Metrics values={[[String(items.filter((i) => i.status === 'Pending').length),"Pending approvals"],["$28.6K","Value awaiting review"],["4.2 hrs","Average decision time"]]} /><ListCard title="Items requiring your decision" description="Actions below update the demo workflow immediately">{items.map((item) => <div key={item.id} className="flex flex-col gap-3 border-b p-4 last:border-0 sm:flex-row sm:items-center"><span className="grid size-10 place-items-center rounded-xl bg-primary/8 text-primary"><ClipboardCheck className="size-5" /></span><div className="min-w-0 flex-1"><p className="text-sm font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.id} · Submitted by {item.owner}</p></div><p className="font-mono text-sm font-semibold">{item.amount}</p>{item.status === 'Approved' ? <Badge className="bg-emerald-600"><Check /> Approved</Badge> : <Button size="sm" onClick={() => approve(item.id)}>Approve</Button>}</div>)}</ListCard></div>;
+  const [items, setItems] = useState<ApprovalItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState('');
+  const [notice, setNotice] = useState('');
+  useEffect(() => {
+    let active = true;
+    fetch('/api/approvals', { cache: 'no-store' })
+      .then(async (response) => { const payload = await response.json() as { approvals?: ApprovalItem[]; error?: string }; if (!response.ok) throw new Error(payload.error || 'Approvals could not be loaded.'); return payload.approvals || []; })
+      .then((approvals) => { if (active) setItems(approvals); })
+      .catch((error: unknown) => { if (active) setNotice(error instanceof Error ? error.message : 'Approvals could not be loaded.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+  const approve = async (id: string) => {
+    if (busyId) return;
+    setBusyId(id); setNotice('Saving approval…');
+    try {
+      const response = await fetch('/api/approvals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transactionId: id, action: 'approve' }) });
+      const payload = await response.json() as { approval?: ApprovalItem; error?: string };
+      if (!response.ok || !payload.approval) throw new Error(payload.error || 'Approval could not be saved.');
+      setItems((current) => current.filter((item) => item.id !== id));
+      setNotice(`${id} approved. The decision was saved with an audit trail.`);
+      window.dispatchEvent(new Event('ledgerflow-approvals-changed'));
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Approval could not be saved.'); }
+    finally { setBusyId(''); }
+  };
+  const pendingValue = items.reduce((sum, item) => sum + Number(item.amount.replace(/[^0-9.-]/g, '') || 0), 0);
+  const valueLabel = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(pendingValue);
+  return <div className="space-y-5"><Header crumb="Workflow / Approvals" title="Approval center" copy="Review evidence, coding, and authority before finance processes payment." />{notice ? <div role="status" className={`rounded-xl border px-4 py-3 text-sm ${/could not|required|not found|rejected/i.test(notice) ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{notice}</div> : null}<Metrics values={[[loading ? '…' : String(items.length),"Pending approvals"],[loading ? '…' : valueLabel,"Value awaiting review"],["Audited","Decision record"]]} /><ListCard title="Items requiring your decision" description="Pending saved transactions are shown here automatically">{items.map((item) => <div key={item.id} className="flex flex-col gap-3 border-b p-4 last:border-0 sm:flex-row sm:items-center"><span className="grid size-10 place-items-center rounded-xl bg-primary/8 text-primary"><ClipboardCheck className="size-5" /></span><div className="min-w-0 flex-1"><p className="text-sm font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.id}{item.reference ? ` · ${item.reference}` : ''} · Submitted by {item.owner}</p><p className="mt-0.5 text-xs text-muted-foreground">{item.department || 'No department'} · {item.date}</p></div><p className="font-mono text-sm font-semibold">{item.amount}</p><Button size="sm" disabled={busyId === item.id} onClick={() => approve(item.id)}>{busyId === item.id ? 'Approving…' : 'Approve'}</Button></div>)}{!loading && items.length === 0 ? <div className="grid min-h-48 place-items-center p-6 text-center"><div><CheckCircle2 className="mx-auto mb-3 size-8 text-emerald-600" /><p className="font-medium">No approvals waiting</p><p className="mt-1 text-sm text-muted-foreground">New or edited transactions will appear here for review.</p></div></div> : null}{loading ? <div className="grid min-h-48 place-items-center p-6 text-sm text-muted-foreground">Loading saved approvals…</div> : null}</ListCard></div>;
 }
 
 function Closing() {
