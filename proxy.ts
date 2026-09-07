@@ -1,7 +1,11 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
 
 function isPublicRoute(pathname: string) {
-  return pathname === '/sign-in' || pathname.startsWith('/sign-in/');
+  return (
+    pathname === '/api/health' ||
+    pathname === '/sign-in' ||
+    pathname.startsWith('/sign-in/')
+  );
 }
 
 export default clerkMiddleware(async (auth, request) => {
