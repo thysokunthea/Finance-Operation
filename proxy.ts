@@ -1,4 +1,5 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
 
 function isPublicRoute(pathname: string) {
   return (
@@ -9,7 +10,15 @@ function isPublicRoute(pathname: string) {
 }
 
 export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request.nextUrl.pathname)) await auth.protect();
+  const { pathname } = request.nextUrl;
+  if (isPublicRoute(pathname)) return;
+
+  const { userId, redirectToSignIn } = await auth();
+  if (userId) return;
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  return redirectToSignIn({ returnBackUrl: request.url });
 });
 
 export const config = {
