@@ -1,5 +1,5 @@
-import { env } from 'cloudflare:workers';
 import type { ChatGPTUser } from '@/app/chatgpt-auth';
+import { executeBatch, query } from '@/db/neon';
 
 const organizationId = 'ledgerflow-org';
 
@@ -31,18 +31,15 @@ export const defaultComplianceSettings: ComplianceSettings = {
 };
 
 export async function getComplianceSettings(): Promise<ComplianceSettings> {
-  const row =
-    await env.DB.prepare(`SELECT new_json AS settingsJson, occurred_at AS reviewedAt
-    FROM audit_logs WHERE organization_id = ? AND resource_type = 'compliance_settings'
-    AND resource_id = ? ORDER BY occurred_at DESC LIMIT 1`)
-      .bind(organizationId, organizationId)
-      .first<{ settingsJson: string | null; reviewedAt: string }>();
-  if (!row?.settingsJson) return defaultComplianceSettings;
+  const row = (await query<{ settingsjson: string | null; reviewedat: string }>(`SELECT new_json AS settingsjson, occurred_at AS reviewedat
+    FROM audit_logs WHERE organization_id = $1 AND resource_type = 'compliance_settings'
+    AND resource_id = $2 ORDER BY occurred_at DESC LIMIT 1`, [organizationId, organizationId]))[0];
+  if (!row?.settingsjson) return defaultComplianceSettings;
   try {
     return {
       ...defaultComplianceSettings,
-      ...(JSON.parse(row.settingsJson) as ComplianceSettings),
-      reviewedAt: row.reviewedAt,
+      ...(JSON.parse(row.settingsjson) as ComplianceSettings),
+      reviewedAt: row.reviewedat,
     };
   } catch {
     return defaultComplianceSettings;
@@ -81,32 +78,18 @@ export async function saveComplianceSettings(
 
   const previous = await getComplianceSettings();
   const actorUserId = `user-${stableKey(user.userId)}`;
-  await env.DB.batch([
-    env.DB.prepare(`INSERT INTO users (id, organization_id, external_user_id, email, display_name, status)
-      VALUES (?, ?, ?, ?, ?, 'active') ON CONFLICT(id) DO UPDATE SET email = excluded.email,
-      display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP`).bind(
-      actorUserId,
-      organizationId,
-      user.userId,
-      user.email,
-      user.displayName,
-    ),
-    env.DB.prepare(`UPDATE organizations SET functional_currency = 'KHR', timezone = 'Asia/Phnom_Penh',
-      fiscal_year_start_month = 1, updated_at = CURRENT_TIMESTAMP, version = version + 1 WHERE id = ?`).bind(
-      organizationId,
-    ),
-    env.DB.prepare(`INSERT INTO audit_logs (id, organization_id, actor_user_id, action, resource_type,
-      resource_id, previous_json, new_json, reason, correlation_id) VALUES (?, ?, ?, 'update',
-      'compliance_settings', ?, ?, ?, ?, ?)`).bind(
-      crypto.randomUUID(),
-      organizationId,
-      actorUserId,
-      organizationId,
-      JSON.stringify(previous),
-      JSON.stringify(settings),
-      'Cambodia accounting and GDT compliance profile reviewed.',
-      crypto.randomUUID(),
-    ),
+  await executeBatch([
+    { text: `INSERT INTO organizations (id, name, code, functional_currency, timezone, fiscal_year_start_month)
+      VALUES ($1, 'LedgerFlow Organization', 'LEDGERFLOW', 'KHR', 'Asia/Phnom_Penh', 1)
+      ON CONFLICT(id) DO NOTHING`, parameters: [organizationId] },
+    { text: `INSERT INTO users (id, organization_id, external_user_id, email, display_name, status)
+      VALUES ($1, $2, $3, $4, $5, 'active') ON CONFLICT(id) DO UPDATE SET email = excluded.email,
+      display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP`, parameters: [actorUserId, organizationId, user.userId, user.email, user.displayName] },
+    { text: `UPDATE organizations SET functional_currency = 'KHR', timezone = 'Asia/Phnom_Penh',
+      fiscal_year_start_month = 1, updated_at = CURRENT_TIMESTAMP, version = version + 1 WHERE id = $1`, parameters: [organizationId] },
+    { text: `INSERT INTO audit_logs (id, organization_id, actor_user_id, action, resource_type,
+      resource_id, previous_json, new_json, reason, correlation_id) VALUES ($1, $2, $3, 'update',
+      'compliance_settings', $4, $5, $6, $7, $8)`, parameters: [crypto.randomUUID(), organizationId, actorUserId, organizationId, JSON.stringify(previous), JSON.stringify(settings), 'Cambodia accounting and GDT compliance profile reviewed.', crypto.randomUUID()] },
   ]);
   return getComplianceSettings();
 }

@@ -22,7 +22,22 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const requestHeaders = await headers();
   const userId = requestHeaders.get(USER_ID_HEADER);
   const email = requestHeaders.get(USER_EMAIL_HEADER);
-  if (!userId || !email) return null;
+  if (!userId || !email) {
+    if (!process.env.CLERK_SECRET_KEY) return null;
+    const { currentUser } = await import('@clerk/nextjs/server');
+    const clerkUser = await currentUser();
+    const clerkEmail = clerkUser?.primaryEmailAddress?.emailAddress;
+    if (!clerkUser || !clerkEmail) return null;
+    const clerkName = [clerkUser.firstName, clerkUser.lastName]
+      .filter(Boolean)
+      .join(' ');
+    return {
+      userId: clerkUser.id,
+      displayName: clerkName || clerkEmail,
+      email: clerkEmail,
+      fullName: clerkName || null,
+    };
+  }
 
   const encodedFullName = requestHeaders.get(USER_FULL_NAME_HEADER);
   const fullName =

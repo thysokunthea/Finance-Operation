@@ -1,5 +1,5 @@
-import { env } from 'cloudflare:workers';
 import type { ChatGPTUser } from '@/app/chatgpt-auth';
+import { executeBatch, query } from '@/db/neon';
 
 export type TransactionRecord = {
   id: string;
@@ -28,42 +28,40 @@ export type TransactionRecord = {
 const organizationId = 'ledgerflow-org';
 
 export async function listTransactionRecords(): Promise<TransactionRecord[]> {
-  const result = await env.DB.prepare(`
-    SELECT t.transaction_number AS id, t.transaction_date AS date, t.type, COALESCE(t.reference_number, '') AS reference,
-      COALESCE(c.name, '') AS party, COALESCE(d.name, '') AS department,
-      t.total_minor AS totalMinor, t.payment_status AS status, t.approval_status AS approval,
-      COALESCE(u.display_name, '') AS owner, t.due_date AS dueDate, t.currency,
-      t.subtotal_minor AS subtotalMinor, t.tax_minor AS taxMinor, t.description,
-      (SELECT a.new_json FROM audit_logs a WHERE a.resource_type = 'transaction' AND a.resource_id = t.id ORDER BY a.occurred_at DESC LIMIT 1) AS payloadJson
-    FROM transactions t
-    LEFT JOIN counterparties c ON c.id = t.counterparty_id
-    LEFT JOIN departments d ON d.id = t.department_id
-    LEFT JOIN users u ON u.id = t.responsible_user_id
-    WHERE t.organization_id = ? AND t.posting_status != 'deleted'
-    ORDER BY t.transaction_date DESC, t.created_at DESC
-  `)
-    .bind(organizationId)
-    .all<{
+  const result = await query<{
       id: string;
       date: string;
       type: string;
       reference: string;
       party: string;
       department: string;
-      totalMinor: number;
+      totalminor: number | string;
       status: string;
       approval: string;
       owner: string;
-      dueDate: string | null;
+      duedate: string | null;
       currency: string;
-      subtotalMinor: number;
-      taxMinor: number;
+      subtotalminor: number | string;
+      taxminor: number | string;
       description: string;
-      payloadJson: string | null;
-    }>();
+      payloadjson: string | null;
+    }>(`
+    SELECT t.transaction_number AS id, t.transaction_date AS date, t.type, COALESCE(t.reference_number, '') AS reference,
+      COALESCE(c.name, '') AS party, COALESCE(d.name, '') AS department,
+      t.total_minor AS totalminor, t.payment_status AS status, t.approval_status AS approval,
+      COALESCE(u.display_name, '') AS owner, t.due_date AS duedate, t.currency,
+      t.subtotal_minor AS subtotalminor, t.tax_minor AS taxminor, t.description,
+      (SELECT a.new_json FROM audit_logs a WHERE a.resource_type = 'transaction' AND a.resource_id = t.id ORDER BY a.occurred_at DESC LIMIT 1) AS payloadjson
+    FROM transactions t
+    LEFT JOIN counterparties c ON c.id = t.counterparty_id
+    LEFT JOIN departments d ON d.id = t.department_id
+    LEFT JOIN users u ON u.id = t.responsible_user_id
+    WHERE t.organization_id = $1 AND t.posting_status != 'deleted'
+    ORDER BY t.transaction_date DESC, t.created_at DESC
+  `, [organizationId]);
 
-  return result.results.map((row) => {
-    const payload = parsePayload(row.payloadJson);
+  return result.map((row) => {
+    const payload = parsePayload(row.payloadjson);
     return {
       id: row.id,
       date: formatDate(row.date),
@@ -72,14 +70,14 @@ export async function listTransactionRecords(): Promise<TransactionRecord[]> {
       party: row.party,
       department: row.department,
       category: payload.category || '',
-      amount: formatMoney(row.totalMinor, row.currency),
+      amount: formatMoney(Number(row.totalminor), row.currency),
       status: row.status,
       approval: row.approval,
       owner: row.owner,
-      dueDate: row.dueDate ? formatDate(row.dueDate) : '',
+      dueDate: row.duedate ? formatDate(row.duedate) : '',
       currency: row.currency,
-      subtotal: (row.subtotalMinor / 100).toFixed(2),
-      tax: (row.taxMinor / 100).toFixed(2),
+      subtotal: (Number(row.subtotalminor) / 100).toFixed(2),
+      tax: (Number(row.taxminor) / 100).toFixed(2),
       description: row.description,
       paymentMethod: payload.paymentMethod || '',
       purchaseOrder: payload.purchaseOrder || '',
@@ -115,19 +113,15 @@ export async function saveTransactionRecord(
   const userId = `user-${stableKey(user.userId)}`;
   const counterpartyId = `counterparty-${stableKey(record.party.toLowerCase())}`;
   const departmentId = `department-${stableKey(record.department.toLowerCase())}`;
-  const existing = await env.DB.prepare(
-    'SELECT * FROM transactions WHERE id = ? AND organization_id = ?',
-  )
-    .bind(record.id, organizationId)
-    .first<Record<string, unknown>>();
+  const existing = (await query<Record<string, unknown>>(
+    'SELECT * FROM transactions WHERE id = $1 AND organization_id = $2',
+    [record.id, organizationId],
+  ))[0];
   if (!existing) {
-    const possibleDuplicates =
-      await env.DB.prepare(`SELECT transaction_number, transaction_date FROM transactions
-      WHERE organization_id = ? AND reference_number = ? AND counterparty_id = ? AND total_minor = ?
-      AND posting_status != 'deleted' LIMIT 10`)
-        .bind(organizationId, record.reference, counterpartyId, totalMinor)
-        .all<{ transaction_number: string; transaction_date: string }>();
-    const duplicate = possibleDuplicates.results.find(
+    const possibleDuplicates = await query<{ transaction_number: string; transaction_date: string }>(`SELECT transaction_number, transaction_date FROM transactions
+      WHERE organization_id = $1 AND reference_number = $2 AND counterparty_id = $3 AND total_minor = $4
+      AND posting_status != 'deleted' LIMIT 10`, [organizationId, record.reference, counterpartyId, totalMinor]);
+    const duplicate = possibleDuplicates.find(
       (item) =>
         normalizeDate(item.transaction_date) === normalizeDate(record.date),
     );
@@ -138,84 +132,29 @@ export async function saveTransactionRecord(
   }
 
   const statements = [
-    env.DB.prepare(`INSERT INTO organizations (id, name, code, functional_currency, timezone, fiscal_year_start_month)
-      VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = CURRENT_TIMESTAMP`).bind(
-      organizationId,
-      'LedgerFlow Organization',
-      'LEDGERFLOW',
-      record.currency || 'USD',
-      'Asia/Bangkok',
-      1,
-    ),
-    env.DB.prepare(`INSERT INTO users (id, organization_id, external_user_id, email, display_name, status)
-      VALUES (?, ?, ?, ?, ?, 'active') ON CONFLICT(id) DO UPDATE SET email = excluded.email, display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP`).bind(
-      userId,
-      organizationId,
-      user.userId,
-      user.email,
-      user.displayName,
-    ),
-    env.DB.prepare(`INSERT INTO counterparties (id, organization_id, type, code, name)
-      VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, updated_at = CURRENT_TIMESTAMP`).bind(
-      counterpartyId,
-      organizationId,
-      record.type === 'Income' ? 'customer' : 'vendor',
-      `CP-${stableKey(record.party)}`,
-      record.party,
-    ),
-    env.DB.prepare(`INSERT INTO departments (id, organization_id, code, name)
-      VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = CURRENT_TIMESTAMP`).bind(
-      departmentId,
-      organizationId,
-      `DEPT-${stableKey(record.department)}`,
-      record.department,
-    ),
-    env.DB.prepare(`INSERT INTO transactions (
+    { text: `INSERT INTO organizations (id, name, code, functional_currency, timezone, fiscal_year_start_month)
+      VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = CURRENT_TIMESTAMP`, parameters: [organizationId, 'LedgerFlow Organization', 'LEDGERFLOW', record.currency || 'KHR', 'Asia/Phnom_Penh', 1] },
+    { text: `INSERT INTO users (id, organization_id, external_user_id, email, display_name, status)
+      VALUES ($1, $2, $3, $4, $5, 'active') ON CONFLICT(id) DO UPDATE SET email = excluded.email, display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP`, parameters: [userId, organizationId, user.userId, user.email, user.displayName] },
+    { text: `INSERT INTO counterparties (id, organization_id, type, code, name)
+      VALUES ($1, $2, $3, $4, $5) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, updated_at = CURRENT_TIMESTAMP`, parameters: [counterpartyId, organizationId, record.type === 'Income' ? 'customer' : 'vendor', `CP-${stableKey(record.party)}`, record.party] },
+    { text: `INSERT INTO departments (id, organization_id, code, name)
+      VALUES ($1, $2, $3, $4) ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = CURRENT_TIMESTAMP`, parameters: [departmentId, organizationId, `DEPT-${stableKey(record.department)}`, record.department] },
+    { text: `INSERT INTO transactions (
       id, organization_id, transaction_number, transaction_date, type, reference_number, description,
       counterparty_id, department_id, currency, subtotal_minor, tax_minor, total_minor, due_date,
       payment_status, approval_status, posting_status, responsible_user_id, created_by, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unposted', ?, ?, CURRENT_TIMESTAMP)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'unposted', $17, $18, CURRENT_TIMESTAMP)
     ON CONFLICT(id) DO UPDATE SET transaction_date = excluded.transaction_date, type = excluded.type,
       reference_number = excluded.reference_number, description = excluded.description, counterparty_id = excluded.counterparty_id,
       department_id = excluded.department_id, currency = excluded.currency, subtotal_minor = excluded.subtotal_minor,
       tax_minor = excluded.tax_minor, total_minor = excluded.total_minor, due_date = excluded.due_date,
       payment_status = excluded.payment_status, approval_status = excluded.approval_status,
-      responsible_user_id = excluded.responsible_user_id, updated_at = CURRENT_TIMESTAMP, version = transactions.version + 1`).bind(
-      record.id,
-      organizationId,
-      record.id,
-      normalizeDate(record.date),
-      record.type,
-      record.reference,
-      record.description,
-      counterpartyId,
-      departmentId,
-      record.currency || 'USD',
-      subtotalMinor,
-      balancedTaxMinor,
-      totalMinor,
-      record.dueDate ? normalizeDate(record.dueDate) : null,
-      record.status,
-      record.approval,
-      userId,
-      userId,
-    ),
-    env.DB.prepare(`INSERT INTO audit_logs (id, organization_id, actor_user_id, action, resource_type, resource_id, previous_json, new_json, reason, correlation_id)
-      VALUES (?, ?, ?, ?, 'transaction', ?, ?, ?, ?, ?)`).bind(
-      crypto.randomUUID(),
-      organizationId,
-      userId,
-      existing ? 'update' : 'create',
-      record.id,
-      existing ? JSON.stringify(existing) : null,
-      JSON.stringify(record),
-      existing
-        ? 'Transaction edited and returned for finance review.'
-        : 'Transaction recorded.',
-      crypto.randomUUID(),
-    ),
+      responsible_user_id = excluded.responsible_user_id, updated_at = CURRENT_TIMESTAMP, version = transactions.version + 1`, parameters: [record.id, organizationId, record.id, normalizeDate(record.date), record.type, record.reference, record.description, counterpartyId, departmentId, record.currency || 'KHR', subtotalMinor, balancedTaxMinor, totalMinor, record.dueDate ? normalizeDate(record.dueDate) : null, record.status, record.approval, userId, userId] },
+    { text: `INSERT INTO audit_logs (id, organization_id, actor_user_id, action, resource_type, resource_id, previous_json, new_json, reason, correlation_id)
+      VALUES ($1, $2, $3, $4, 'transaction', $5, $6, $7, $8, $9)`, parameters: [crypto.randomUUID(), organizationId, userId, existing ? 'update' : 'create', record.id, existing ? JSON.stringify(existing) : null, JSON.stringify(record), existing ? 'Transaction edited and returned for finance review.' : 'Transaction recorded.', crypto.randomUUID()] },
   ];
-  await env.DB.batch(statements);
+  await executeBatch(statements);
   const saved = (await listTransactionRecords()).find(
     (item) => item.id === record.id,
   );
