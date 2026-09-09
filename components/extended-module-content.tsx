@@ -30,10 +30,12 @@ type Kind =
   | 'approvals'
   | 'closing'
   | 'assistant'
+  | 'accounting'
   | 'settings';
 
 type PaymentRequestItem = { id: string; title: string; category: string; amount: number; currency: string; status: string };
 type BudgetLine = { department: string; monthlyLimit: number; actual: number; currency: string; utilization: number };
+type AccountLine = { category: string; type: string; total: number; count: number };
 type ApprovalItem = {
   id: string;
   name: string;
@@ -63,6 +65,7 @@ export function ExtendedModuleContent({ kind }: { kind: Kind }) {
   if (kind === 'approvals') return <Approvals />;
   if (kind === 'closing') return <Closing />;
   if (kind === 'assistant') return <Assistant />;
+  if (kind === 'accounting') return <Accounting />;
   return <SettingsPanel />;
 }
 
@@ -242,6 +245,74 @@ function Budgets() {
           </div>
         ))}
         {!loading && lines.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">No department budgets configured yet.</div> : null}
+      </ListCard>
+    </div>
+  );
+}
+
+function Accounting() {
+  const [lines, setLines] = useState<AccountLine[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    fetch('/api/transactions', { cache: 'no-store' })
+      .then(async (response) => {
+        const payload = (await response.json()) as { transactions?: { type: string; category: string; amount: string }[]; error?: string };
+        if (!response.ok) throw new Error(payload.error || 'Accounting data could not be loaded.');
+        const grouped = new Map<string, AccountLine>();
+        for (const transaction of payload.transactions || []) {
+          const key = `${transaction.type}::${transaction.category}`;
+          const existing = grouped.get(key) || { category: transaction.category, type: transaction.type, total: 0, count: 0 };
+          existing.total += Number(transaction.amount) || 0;
+          existing.count += 1;
+          grouped.set(key, existing);
+        }
+        setLines([...grouped.values()].sort((a, b) => b.total - a.total));
+      })
+      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Accounting data could not be loaded.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const totalIncome = lines.filter((l) => l.type === 'Income').reduce((sum, l) => sum + l.total, 0);
+  const totalExpense = lines.filter((l) => l.type === 'Expense').reduce((sum, l) => sum + l.total, 0);
+
+  return (
+    <div className="space-y-5">
+      <Header
+        crumb="Finance / Accounting"
+        title="Accounting summary"
+        copy="A category-level rollup of posted transactions, grouped like a lightweight chart of accounts."
+      />
+      {notice ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{notice}</div> : null}
+      <Metrics
+        values={[
+          [loading ? '…' : money(totalIncome, true), 'Total income'],
+          [loading ? '…' : money(totalExpense, true), 'Total expense'],
+          [loading ? '…' : money(totalIncome - totalExpense, true), 'Net position'],
+        ]}
+      />
+      <ListCard
+        title="Accounts by category"
+        description="Income and expense categories rolled up from recorded transactions"
+      >
+        {lines.map((line) => (
+          <div
+            key={`${line.type}-${line.category}`}
+            className="grid gap-3 border-b p-4 last:border-0 md:grid-cols-[1fr_120px_120px_120px] md:items-center"
+          >
+            <div>
+              <p className="text-sm font-medium">{line.category}</p>
+              <p className="text-xs text-muted-foreground">{line.type}</p>
+            </div>
+            <Value label="Total" value={money(line.total)} />
+            <Value label="Entries" value={String(line.count)} />
+            <Badge variant="outline" className={line.type === 'Income' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-700'}>
+              {line.type}
+            </Badge>
+          </div>
+        ))}
+        {!loading && lines.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">No transactions recorded yet.</div> : null}
       </ListCard>
     </div>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BarChart3, Bell, Bot, Building2, CalendarCheck2, CheckSquare2, ChevronDown, CircleDollarSign, ClipboardCheck, FileBarChart, FileText, FolderOpen, HandCoins, LayoutDashboard, Menu, ReceiptText, Search, Settings, Upload, WalletCards, X } from 'lucide-react';
+import { BarChart3, Bell, BookOpen, Bot, Building2, CalendarCheck2, CheckSquare2, ChevronDown, CircleDollarSign, ClipboardCheck, CreditCard, FileBarChart, FileText, FolderOpen, HandCoins, LayoutDashboard, Menu, Receipt, ReceiptText, Search, Settings, Upload, WalletCards, X } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,12 +12,15 @@ type NavKey = string;
 const primaryNav = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/' },
   { key: 'transactions', label: 'Transactions', icon: ReceiptText, href: '/transactions' },
+  { key: 'sales', label: 'Sales & Invoices', icon: Receipt, href: '/sales-invoices' },
   { key: 'income', label: 'Income', icon: CircleDollarSign, href: '/income' },
   { key: 'expenses', label: 'Expenses', icon: WalletCards, href: '/expenses' },
+  { key: 'expenses-ap', label: 'Expenses & AP', icon: CreditCard, href: '/expenses-ap' },
   { key: 'receivables', label: 'Receivables', icon: HandCoins, href: '/receivables' },
   { key: 'payables', label: 'Payables', icon: Building2, href: '/payables' },
   { key: 'requests', label: 'Payment Requests', icon: FileText, href: '/payment-requests' },
   { key: 'budgets', label: 'Budgets', icon: BarChart3, href: '/budgets' },
+  { key: 'accounting', label: 'Accounting', icon: BookOpen, href: '/accounting' },
 ];
 const workflowNav = [
   { key: 'tasks', label: 'My Tasks', icon: CheckSquare2, href: '/tasks' },
