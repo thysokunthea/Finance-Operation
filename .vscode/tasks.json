@@ -1,0 +1,295 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Audit production build",
+			"type": "shell",
+			"command": "pnpm.cmd",
+			"args": [
+				"build"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"label": "Audit lint",
+			"type": "shell",
+			"command": "pnpm.cmd",
+			"args": [
+				"lint"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint - stylish"
+			]
+		},
+		{
+			"label": "Recheck lint after fixes",
+			"type": "shell",
+			"command": "pnpm.cmd",
+			"args": [
+				"lint"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint - stylish"
+			]
+		},
+		{
+			"label": "Final lint validation",
+			"type": "shell",
+			"command": "pnpm.cmd",
+			"args": [
+				"lint"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint - stylish"
+			]
+		},
+		{
+			"label": "Final lint gate",
+			"type": "shell",
+			"command": "pnpm.cmd",
+			"args": [
+				"lint"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint - stylish"
+			]
+		},
+		{
+			"label": "Lint after image fix",
+			"type": "shell",
+			"command": "pnpm.cmd",
+			"args": [
+				"lint"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint - stylish"
+			]
+		},
+		{
+			"label": "Final lint pass",
+			"type": "shell",
+			"command": "pnpm.cmd",
+			"args": [
+				"lint"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint - stylish"
+			]
+		},
+		{
+			"label": "Inspect lint rule IDs",
+			"type": "shell",
+			"command": "pnpm.cmd",
+			"args": [
+				"exec",
+				"oxlint",
+				"--format",
+				"json"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Lint JSON final check",
+			"type": "shell",
+			"command": "pnpm.cmd",
+			"args": [
+				"exec",
+				"oxlint",
+				"--format",
+				"json"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Clean lint gate",
+			"type": "shell",
+			"command": "pnpm.cmd",
+			"args": [
+				"exec",
+				"oxlint",
+				"--format",
+				"json"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Final production build",
+			"type": "shell",
+			"command": "pnpm.cmd",
+			"args": [
+				"build"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"label": "Deploy audited production build",
+			"type": "shell",
+			"command": "vercel.cmd",
+			"args": [
+				"--prod"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Smoke test production APIs",
+			"type": "shell",
+			"command": "vercel.cmd",
+			"args": [
+				"curl",
+				"https://ledgerflow-finance-operations.vercel.app/api/health"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Smoke test protected API",
+			"type": "shell",
+			"command": "vercel.cmd",
+			"args": [
+				"curl",
+				"https://ledgerflow-finance-operations.vercel.app/api/transactions"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Remove old Vercel Clerk secret",
+			"type": "shell",
+			"command": "vercel.cmd",
+			"args": [
+				"env",
+				"rm",
+				"CLERK_SECRET_KEY",
+				"production",
+				"--yes"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Add new Vercel Clerk secret",
+			"type": "shell",
+			"command": "powershell.exe",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				".tmp-sync-clerk.ps1"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Verify Vercel Clerk environment",
+			"type": "shell",
+			"command": "vercel.cmd",
+			"args": [
+				"env",
+				"ls"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Vercel env command",
+			"type": "shell",
+			"command": "vercel.cmd",
+			"args": [
+				"env",
+				"add",
+				"--help"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Sync new Clerk secret to Vercel",
+			"type": "shell",
+			"command": "powershell.exe",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				".tmp-sync-clerk.ps1"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Sync Clerk secret to Vercel",
+			"type": "shell",
+			"command": "powershell.exe",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				".tmp-sync-clerk.ps1"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Build with new environment",
+			"type": "shell",
+			"command": "pnpm.cmd",
+			"args": [
+				"build"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"label": "Deploy with rotated Clerk secret",
+			"type": "shell",
+			"command": "vercel.cmd",
+			"args": [
+				"--prod"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check deployed health",
+			"type": "shell",
+			"command": "vercel.cmd",
+			"args": [
+				"curl",
+				"https://ledgerflow-finance-operations.vercel.app/api/health"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check deployed auth",
+			"type": "shell",
+			"command": "vercel.cmd",
+			"args": [
+				"curl",
+				"https://ledgerflow-finance-operations.vercel.app/api/transactions"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

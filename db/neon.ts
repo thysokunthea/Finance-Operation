@@ -103,10 +103,48 @@ async function initializeCoreSchema(): Promise<void> {
       attempt_count integer NOT NULL DEFAULT 0, processed_at timestamptz, last_error text,
       created_at timestamptz NOT NULL DEFAULT now()
     )`,
+    `CREATE TABLE IF NOT EXISTS documents (
+      id text PRIMARY KEY, organization_id text NOT NULL REFERENCES organizations(id),
+      file_name text NOT NULL, mime_type text NOT NULL, size_bytes integer NOT NULL,
+      category text NOT NULL DEFAULT 'Other', status text NOT NULL DEFAULT 'Verified',
+      linked_reference text, content_base64 text NOT NULL,
+      uploaded_by text REFERENCES users(id), created_at timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS budgets (
+      id text PRIMARY KEY, organization_id text NOT NULL REFERENCES organizations(id),
+      department text NOT NULL, monthly_limit_minor bigint NOT NULL, currency text NOT NULL DEFAULT 'USD',
+      created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+      version integer NOT NULL DEFAULT 1, UNIQUE (organization_id, department)
+    )`,
+    `CREATE TABLE IF NOT EXISTS payment_requests (
+      id text PRIMARY KEY, organization_id text NOT NULL REFERENCES organizations(id),
+      request_number text NOT NULL, title text NOT NULL, category text NOT NULL,
+      amount_minor bigint NOT NULL, currency text NOT NULL DEFAULT 'USD',
+      status text NOT NULL DEFAULT 'Draft', requested_by text REFERENCES users(id),
+      created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+      version integer NOT NULL DEFAULT 1, UNIQUE (organization_id, request_number)
+    )`,
+    `CREATE TABLE IF NOT EXISTS closing_tasks (
+      id text PRIMARY KEY, organization_id text NOT NULL REFERENCES organizations(id),
+      period text NOT NULL, task_name text NOT NULL, completed boolean NOT NULL DEFAULT false,
+      completed_at timestamptz, updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (organization_id, period, task_name)
+    )`,
+    `CREATE TABLE IF NOT EXISTS finance_tasks (
+      id text PRIMARY KEY, organization_id text NOT NULL REFERENCES organizations(id),
+      title text NOT NULL, category text NOT NULL DEFAULT 'Manual', related_reference text,
+      due_label text, priority text NOT NULL DEFAULT 'Medium', status text NOT NULL DEFAULT 'Not Started',
+      created_by text REFERENCES users(id), created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
     `CREATE INDEX IF NOT EXISTS idx_transactions_org_date_status
       ON transactions (organization_id, transaction_date, posting_status)`,
     `CREATE INDEX IF NOT EXISTS idx_audit_resource_time
       ON audit_logs (resource_type, resource_id, occurred_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_documents_org_created
+      ON documents (organization_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_finance_tasks_org_status
+      ON finance_tasks (organization_id, status)`,
   ];
   for (const statement of statements) await sql.query(statement);
 }

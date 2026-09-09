@@ -202,9 +202,10 @@ function normalizeDate(value: string) {
     : value;
 }
 
-function formatDate(value: string) {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return value;
+function formatDate(value: string | Date) {
+  const raw = value instanceof Date ? value.toISOString().slice(0, 10) : value;
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return raw;
   const month = [
     'Jan',
     'Feb',

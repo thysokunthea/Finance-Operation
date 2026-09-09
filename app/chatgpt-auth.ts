@@ -25,7 +25,7 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   if (!userId || !email) {
     if (!process.env.CLERK_SECRET_KEY) return null;
     const { currentUser } = await import('@clerk/nextjs/server');
-    const clerkUser = await currentUser();
+    const clerkUser = await currentUser().catch(() => null);
     const clerkEmail = clerkUser?.primaryEmailAddress?.emailAddress;
     if (!clerkUser || !clerkEmail) return null;
     const clerkName = [clerkUser.firstName, clerkUser.lastName]

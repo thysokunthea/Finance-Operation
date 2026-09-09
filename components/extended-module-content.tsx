@@ -32,29 +32,8 @@ type Kind =
   | 'assistant'
   | 'settings';
 
-const requests = [
-  [
-    'REQ-2026-0198',
-    'Software renewal',
-    'Technology',
-    '$18,400',
-    'Pending Approval',
-  ],
-  [
-    'REQ-2026-0197',
-    'Supplier settlement',
-    'Operations',
-    '$6,284',
-    'Finance Review',
-  ],
-  ['REQ-2026-0194', 'Client travel claim', 'Commercial', '$1,260', 'Approved'],
-];
-const budgetLines = [
-  ['Technology', '$92,000', '$80,040', '$6,800', '87%'],
-  ['Operations', '$118,000', '$74,340', '$12,200', '63%'],
-  ['Commercial', '$96,000', '$57,600', '$8,400', '60%'],
-  ['People', '$59,000', '$36,220', '$4,000', '61%'],
-];
+type PaymentRequestItem = { id: string; title: string; category: string; amount: number; currency: string; status: string };
+type BudgetLine = { department: string; monthlyLimit: number; actual: number; currency: string; utilization: number };
 type ApprovalItem = {
   id: string;
   name: string;
@@ -78,19 +57,6 @@ type ComplianceState = {
   gdtFilingMethod: string;
   reviewedAt?: string;
 };
-const closingSeed = [
-  'Bank reconciliation',
-  'AR review',
-  'AP review',
-  'Expense review',
-  'Missing-document review',
-  'Outstanding advances',
-  'Budget review',
-  'Tax review',
-  'Accrual review',
-  'Management report',
-];
-
 export function ExtendedModuleContent({ kind }: { kind: Kind }) {
   if (kind === 'requests') return <Requests />;
   if (kind === 'budgets') return <Budgets />;
@@ -100,36 +66,64 @@ export function ExtendedModuleContent({ kind }: { kind: Kind }) {
   return <SettingsPanel />;
 }
 
+function money(value: number, compact = false) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: compact ? 'compact' : 'standard', maximumFractionDigits: compact ? 1 : 2 }).format(value);
+}
+
 function Requests() {
-  const [items, setItems] = useState(requests);
-  const createRequest = () =>
-    setItems((current) =>
-      current.some((item) => item[0] === 'REQ-2026-0199')
-        ? current
-        : [
-            [
-              'REQ-2026-0199',
-              'New expense request',
-              'Operations',
-              '$0',
-              'Draft',
-            ],
-            ...current,
-          ],
-    );
+  const [items, setItems] = useState<PaymentRequestItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    fetch('/api/payment-requests', { cache: 'no-store' })
+      .then(async (response) => {
+        const payload = (await response.json()) as { requests?: PaymentRequestItem[]; error?: string };
+        if (!response.ok) throw new Error(payload.error || 'Payment requests could not be loaded.');
+        setItems(payload.requests || []);
+      })
+      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Payment requests could not be loaded.'))
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, []);
+
+  const createRequest = async () => {
+    setCreating(true);
+    try {
+      const response = await fetch('/api/payment-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'New expense request', category: 'Operations', amount: 0.01 }),
+      });
+      const payload = (await response.json()) as { requests?: PaymentRequestItem[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Request could not be created.');
+      setItems(payload.requests || []);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Request could not be created.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const pendingValue = items.filter((i) => i.status !== 'Approved').reduce((sum, i) => sum + i.amount, 0);
+  const onTime = items.length ? Math.round((items.filter((i) => i.status === 'Approved').length / items.length) * 100) : 100;
+
   return (
     <div className="space-y-5">
       <Header
         crumb="Finance / Payment Requests"
         title="Payment requests"
         copy="Submit, review, authorize, pay, and close requests in one controlled workflow."
-        action={<Button onClick={createRequest}>New request</Button>}
+        action={<Button onClick={createRequest} disabled={creating}>{creating ? 'Creating…' : 'New request'}</Button>}
       />
+      {notice ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{notice}</div> : null}
       <Metrics
         values={[
-          ['$26.7K', 'Pending value'],
-          [String(items.length), 'Requests in queue'],
-          ['96%', 'On-time processing'],
+          [loading ? '…' : money(pendingValue, true), 'Pending value'],
+          [loading ? '…' : String(items.length), 'Requests in queue'],
+          [loading ? '…' : `${onTime}%`, 'Approved so far'],
         ]}
       />
       <ListCard
@@ -138,74 +132,116 @@ function Requests() {
       >
         {items.map((r) => (
           <Row
-            key={r[0]}
-            title={r[1]}
-            subtitle={`${r[0]} · ${r[2]}`}
-            value={r[3]}
-            status={r[4]}
+            key={r.id}
+            title={r.title}
+            subtitle={`${r.id} · ${r.category}`}
+            value={money(r.amount)}
+            status={r.status}
           />
         ))}
+        {!loading && items.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">No payment requests yet.</div> : null}
       </ListCard>
     </div>
   );
 }
 
 function Budgets() {
+  const [lines, setLines] = useState<BudgetLine[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState('');
+  const [department, setDepartment] = useState('');
+  const [limit, setLimit] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    fetch('/api/budgets', { cache: 'no-store' })
+      .then(async (response) => {
+        const payload = (await response.json()) as { budgets?: BudgetLine[]; error?: string };
+        if (!response.ok) throw new Error(payload.error || 'Budgets could not be loaded.');
+        setLines(payload.budgets || []);
+      })
+      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Budgets could not be loaded.'))
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, []);
+
+  const addBudget = async () => {
+    setSaving(true);
+    try {
+      const response = await fetch('/api/budgets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ department, monthlyLimit: Number(limit) }),
+      });
+      const payload = (await response.json()) as { budgets?: BudgetLine[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Budget could not be saved.');
+      setLines(payload.budgets || []);
+      setDepartment('');
+      setLimit('');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Budget could not be saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const totalBudget = lines.reduce((sum, l) => sum + l.monthlyLimit, 0);
+  const totalActual = lines.reduce((sum, l) => sum + l.actual, 0);
+
   return (
     <div className="space-y-5">
       <Header
         crumb="Finance / Budgets"
         title="Budget control"
-        copy="Monitor actual and committed spending before limits are exceeded."
-        action={
-          <Button
-            variant="outline"
-            onClick={() => {
-              window.location.href = '/settings';
-            }}
-          >
-            Edit thresholds
-          </Button>
-        }
+        copy="Monitor actual spending against department limits before they are exceeded."
       />
+      {notice ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{notice}</div> : null}
       <Metrics
         values={[
-          ['$365K', 'Monthly budget'],
-          ['$248.2K', 'Actual spending'],
-          ['$85.4K', 'Remaining'],
+          [loading ? '…' : money(totalBudget, true), 'Monthly budget'],
+          [loading ? '…' : money(totalActual, true), 'Actual spending'],
+          [loading ? '…' : money(Math.max(0, totalBudget - totalActual), true), 'Remaining'],
         ]}
       />
+      <Card>
+        <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-end">
+          <label className="flex-1 text-xs font-medium">Department<Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Technology" className="mt-2" /></label>
+          <label className="w-40 text-xs font-medium">Monthly limit (USD)<Input value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" placeholder="0" className="mt-2" /></label>
+          <Button onClick={addBudget} disabled={saving || !department || !limit}>{saving ? 'Saving…' : 'Set budget'}</Button>
+        </CardContent>
+      </Card>
       <ListCard
         title="Department utilization"
-        description="Actual and committed spend compared with August budget"
+        description="Actual spend this month compared with the configured budget"
       >
-        {budgetLines.map((r) => (
+        {lines.map((line) => (
           <div
-            key={r[0]}
+            key={line.department}
             className="grid gap-3 border-b p-4 last:border-0 md:grid-cols-[1fr_120px_120px_120px_90px] md:items-center"
           >
             <div>
-              <p className="text-sm font-medium">{r[0]}</p>
-              <Progress
-                value={Number(r[4].replace('%', ''))}
-                className="mt-2 h-1.5"
-              />
+              <p className="text-sm font-medium">{line.department}</p>
+              <Progress value={Math.min(100, line.utilization)} className="mt-2 h-1.5" />
             </div>
-            <Value label="Budget" value={r[1]} />
-            <Value label="Actual" value={r[2]} />
-            <Value label="Committed" value={r[3]} />
+            <Value label="Budget" value={money(line.monthlyLimit)} />
+            <Value label="Actual" value={money(line.actual)} />
+            <Value label="Committed" value={money(0)} />
             <Badge
               variant="outline"
               className={
-                r[4] === '87%'
-                  ? 'border-amber-200 bg-amber-50 text-amber-700'
-                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                line.utilization >= 95
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : line.utilization >= 80
+                    ? 'border-amber-200 bg-amber-50 text-amber-700'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-700'
               }
             >
-              {r[4]} used
+              {line.utilization}% used
             </Badge>
           </div>
         ))}
+        {!loading && lines.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">No department budgets configured yet.</div> : null}
       </ListCard>
     </div>
   );
@@ -359,49 +395,85 @@ function Approvals() {
   );
 }
 
+function currentPeriodLabel() {
+  return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
 function Closing() {
-  const [done, setDone] = useState<string[]>(closingSeed.slice(0, 4));
-  const progress = Math.round((done.length / closingSeed.length) * 100);
-  const toggle = (name: string) =>
-    setDone((current) =>
-      current.includes(name)
-        ? current.filter((item) => item !== name)
-        : [...current, name],
-    );
+  const [tasks, setTasks] = useState<string[]>([]);
+  const [status, setStatus] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState('');
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    fetch('/api/closing', { cache: 'no-store' })
+      .then(async (response) => {
+        const payload = (await response.json()) as { tasks?: string[]; status?: Record<string, boolean>; error?: string };
+        if (!response.ok) throw new Error(payload.error || 'Closing checklist could not be loaded.');
+        setTasks(payload.tasks || []);
+        setStatus(payload.status || {});
+      })
+      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Closing checklist could not be loaded.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const doneCount = tasks.filter((name) => status[name]).length;
+  const progress = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
+
+  const toggle = async (name: string) => {
+    setBusy(name);
+    const next = !status[name];
+    try {
+      const response = await fetch('/api/closing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskName: name, completed: next }),
+      });
+      const payload = (await response.json()) as { status?: Record<string, boolean>; error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Closing task could not be saved.');
+      setStatus(payload.status || {});
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Closing task could not be saved.');
+    } finally {
+      setBusy('');
+    }
+  };
+
   return (
     <div className="space-y-5">
       <Header
         crumb="Workflow / Monthly Closing"
-        title="August 2026 close"
+        title={`${currentPeriodLabel()} close`}
         copy="Complete and evidence every control before the accounting period is locked."
         action={
           <Badge
             variant="outline"
-            className="border-amber-200 bg-amber-50 text-amber-700"
+            className={progress === 100 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}
           >
-            In progress
+            {progress === 100 ? 'Complete' : 'In progress'}
           </Badge>
         }
       />
+      {notice ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{notice}</div> : null}
       <Card>
         <CardContent className="p-5">
           <div className="flex justify-between text-sm">
             <span className="font-medium">Closing progress</span>
-            <span>
-              {progress}% · {done.length}/{closingSeed.length} complete
-            </span>
+            <span>{loading ? '…' : `${progress}% · ${doneCount}/${tasks.length} complete`}</span>
           </div>
           <Progress value={progress} className="mt-3" />
         </CardContent>
       </Card>
       <div className="grid gap-3 md:grid-cols-2">
-        {closingSeed.map((name) => {
-          const checked = done.includes(name);
+        {tasks.map((name) => {
+          const checked = Boolean(status[name]);
           return (
             <button
               key={name}
+              disabled={busy === name}
               onClick={() => toggle(name)}
-              className="flex items-center gap-3 rounded-xl border bg-card p-4 text-left transition hover:border-primary/40"
+              className="flex items-center gap-3 rounded-xl border bg-card p-4 text-left transition hover:border-primary/40 disabled:opacity-60"
             >
               <span
                 className={`grid size-8 place-items-center rounded-lg ${checked ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'}`}
@@ -424,17 +496,108 @@ function Closing() {
   );
 }
 
+type AssistantTransaction = { type: string; party: string; department: string; amount: string; status: string; dueDate?: string; date: string };
+
+function amountValue(value: string) {
+  const parsed = Number(value.replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+function assistantMoney(value: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+}
+function parseAssistantDate(value?: string): Date | null {
+  if (!value) return null;
+  const match = value.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
+  if (match) {
+    const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(match[2]);
+    if (month >= 0) return new Date(Number(match[3]), month, Number(match[1]));
+  }
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
+
+function answerFromData(question: string, rows: AssistantTransaction[], budgets: BudgetLine[]): string {
+  const q = question.toLowerCase();
+  const today = new Date(new Date().toDateString());
+
+  if (q.includes('overdue') && (q.includes('customer') || q.includes('invoice') || q.includes('receivable'))) {
+    const overdue = rows.filter((r) => r.type.toLowerCase() === 'income' && r.status.toLowerCase() !== 'paid' && (() => { const due = parseAssistantDate(r.dueDate); return due ? due.getTime() < today.getTime() : r.status.toLowerCase() === 'overdue'; })());
+    if (overdue.length === 0) return 'No customer invoices are currently overdue.';
+    const total = overdue.reduce((sum, r) => sum + amountValue(r.amount), 0);
+    const list = overdue.slice(0, 5).map((r) => `${r.party || 'Unknown'} owes ${assistantMoney(amountValue(r.amount))}`).join('; ');
+    return `${overdue.length} customer${overdue.length === 1 ? '' : 's'} overdue: ${list}. Total overdue: ${assistantMoney(total)}.`;
+  }
+
+  if (q.includes('over budget') || (q.includes('budget') && q.includes('department'))) {
+    const over = budgets.filter((b) => b.utilization >= 100);
+    if (budgets.length === 0) return 'No department budgets are configured yet. Set them up on the Budgets page.';
+    if (over.length === 0) return `No department is over budget. Highest utilization: ${budgets.slice().sort((a, b) => b.utilization - a.utilization).map((b) => `${b.department} at ${b.utilization}%`)[0] || 'n/a'}.`;
+    return `${over.map((b) => `${b.department} is at ${b.utilization}% of its ${assistantMoney(b.monthlyLimit)} budget`).join('; ')}.`;
+  }
+
+  if (q.includes('payment') && (q.includes('due') || q.includes('week'))) {
+    const dueSoon = rows.filter((r) => r.type.toLowerCase() === 'expense' && r.status.toLowerCase() !== 'paid' && (() => { const due = parseAssistantDate(r.dueDate); if (!due) return false; const days = (due.getTime() - today.getTime()) / 86400000; return days >= 0 && days <= 7; })());
+    if (dueSoon.length === 0) return 'No supplier payments are due in the next 7 days.';
+    const total = dueSoon.reduce((sum, r) => sum + amountValue(r.amount), 0);
+    return `${dueSoon.length} payment${dueSoon.length === 1 ? '' : 's'} due within 7 days, totaling ${assistantMoney(total)}: ${dueSoon.slice(0, 5).map((r) => `${r.party || 'Unknown'} (${assistantMoney(amountValue(r.amount))})`).join('; ')}.`;
+  }
+
+  const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const monthRows = rows.filter((r) => {
+    const d = parseAssistantDate(r.date);
+    return d && `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === currentMonth;
+  });
+  const revenue = monthRows.filter((r) => r.type.toLowerCase() === 'income').reduce((sum, r) => sum + amountValue(r.amount), 0);
+  const expenses = monthRows.filter((r) => r.type.toLowerCase() === 'expense').reduce((sum, r) => sum + amountValue(r.amount), 0);
+  return `Based on records available to your role, this month's revenue is ${assistantMoney(revenue)}, expenses are ${assistantMoney(expenses)}, and net result is ${assistantMoney(revenue - expenses)}.`;
+}
+
 function Assistant() {
   const [question, setQuestion] = useState(
     'Which customers have overdue invoices?',
   );
   const [answer, setAnswer] = useState('');
-  const ask = () =>
-    setAnswer(
-      question.toLowerCase().includes('overdue')
-        ? 'Two customers are overdue: Cedar & Stone owes $14,750 (41 days), and Aurora Hospitality owes $18,600 (3 days). Total overdue: $33,350.'
-        : 'Based on the records available to your Finance Manager role, August revenue is $342,800, expenses are $248,200, and net profit is $94,600.',
-    );
+  const [rows, setRows] = useState<AssistantTransaction[]>([]);
+  const [budgets, setBudgets] = useState<BudgetLine[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [asking, setAsking] = useState(false);
+  const [source, setSource] = useState<'ai' | 'rules' | ''>('');
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/transactions', { cache: 'no-store' }).then((r) => r.json()),
+      fetch('/api/budgets', { cache: 'no-store' }).then((r) => r.json()),
+    ])
+      .then(([txPayload, budgetPayload]) => {
+        setRows(txPayload.transactions || []);
+        setBudgets(budgetPayload.budgets || []);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const ask = async () => {
+    setAsking(true);
+    try {
+      const response = await fetch('/api/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+      });
+      const payload = (await response.json()) as { answer?: string; error?: string };
+      if (response.ok && payload.answer) {
+        setAnswer(payload.answer);
+        setSource('ai');
+      } else {
+        setAnswer(answerFromData(question, rows, budgets));
+        setSource('rules');
+      }
+    } catch {
+      setAnswer(answerFromData(question, rows, budgets));
+      setSource('rules');
+    } finally {
+      setAsking(false);
+    }
+  };
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <Header
@@ -464,8 +627,7 @@ function Assistant() {
           {answer ? (
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm leading-6">
               <div className="mb-2 flex items-center gap-2 font-semibold text-primary">
-                <Sparkles className="size-4" /> Answer from authorized finance
-                data
+                <Sparkles className="size-4" /> {source === 'ai' ? 'AI answer grounded in your finance data' : 'Answer from authorized finance data'}
               </div>
               {answer}
             </div>
@@ -480,6 +642,7 @@ function Assistant() {
             <Button
               aria-label="Send question"
               onClick={ask}
+              disabled={loading || asking}
               className="self-end"
             >
               <Send />

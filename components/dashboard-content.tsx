@@ -12,12 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 const chartConfig = { inflow: { label: 'Cash inflow', color: 'var(--chart-1)' }, outflow: { label: 'Cash outflow', color: 'var(--chart-2)' } } satisfies ChartConfig;
-const attentionItems = [
-  { type: 'approvals', title: '8 requests awaiting review', detail: '$87,450 total value', icon: CheckCircle2, tone: 'amber' },
-  { type: 'receivables', title: '6 invoices overdue', detail: '$42,780 outstanding', icon: Clock3, tone: 'red' },
-  { type: 'documents', title: '12 records missing evidence', detail: 'Oldest item is 9 days', icon: FileWarning, tone: 'amber' },
-  { type: 'payables', title: '4 payments due this week', detail: '$31,200 scheduled', icon: CalendarDays, tone: 'blue' },
-];
+const attentionTypes = ['approvals', 'receivables', 'documents', 'payables'] as const;
+const attentionMeta: Record<(typeof attentionTypes)[number], { icon: typeof CheckCircle2; tone: string }> = {
+  approvals: { icon: CheckCircle2, tone: 'amber' },
+  receivables: { icon: Clock3, tone: 'red' },
+  documents: { icon: FileWarning, tone: 'amber' },
+  payables: { icon: CalendarDays, tone: 'blue' },
+};
 const statusStyles: Record<string, string> = { Paid: 'border-emerald-200 bg-emerald-50 text-emerald-700', Approved: 'border-sky-200 bg-sky-50 text-sky-700', Pending: 'border-amber-200 bg-amber-50 text-amber-700', Overdue: 'border-red-200 bg-red-50 text-red-700', 'Missing Document': 'border-orange-200 bg-orange-50 text-orange-700' };
 
 type DashboardTransaction = {
@@ -30,7 +31,19 @@ type DashboardTransaction = {
   amount: string;
   status: string;
   approval: string;
+  dueDate?: string;
 };
+
+function parseDueDate(value?: string): Date | null {
+  if (!value) return null;
+  const match = value.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
+  if (match) {
+    const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(match[2]);
+    if (month >= 0) return new Date(Number(match[3]), month, Number(match[1]));
+  }
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
 
 const monthOptions = Array.from({ length: 60 }, (_, index) => {
   const date = new Date(2026, index, 1);
@@ -88,6 +101,30 @@ export function DashboardContent() {
   const [transactions, setTransactions] = useState<DashboardTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [missingDocuments, setMissingDocuments] = useState(0);
+  const [monthlyBudget, setMonthlyBudget] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/budgets', { cache: 'no-store' })
+      .then(async (response) => {
+        const payload = await response.json() as { budgets?: Array<{ monthlyLimit: number }>; error?: string };
+        if (response.ok && active) setMonthlyBudget((payload.budgets || []).reduce((sum, b) => sum + b.monthlyLimit, 0));
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/documents', { cache: 'no-store' })
+      .then(async (response) => {
+        const payload = await response.json() as { documents?: Array<{ status: string }>; error?: string };
+        if (response.ok && active) setMissingDocuments((payload.documents || []).filter((d) => d.status !== 'Verified').length);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -131,11 +168,21 @@ export function DashboardContent() {
       outflow: rows.filter((transaction) => transaction.type.toLowerCase() === 'expense').reduce((sum, transaction) => sum + amountValue(transaction.amount), 0) / 1000,
     };
   });
-  const budget = 365000;
-  const budgetUsed = Math.min(100, Math.round((expenses / budget) * 100));
+  const budget = monthlyBudget;
+  const budgetUsed = budget > 0 ? Math.min(100, Math.round((expenses / budget) * 100)) : 0;
   const pendingApprovals = transactions.filter((transaction) => !['approved', 'rejected'].includes((transaction.approval || '').toLowerCase()));
   const pendingApprovalValue = pendingApprovals.reduce((sum, transaction) => sum + amountValue(transaction.amount), 0);
-  const currentAttentionItems = attentionItems.map((item) => item.type === 'approvals' ? { ...item, title: `${pendingApprovals.length} request${pendingApprovals.length === 1 ? '' : 's'} awaiting review`, detail: `${money(pendingApprovalValue, true)} total value` } : item);
+  const today = new Date(new Date().toDateString());
+  const overdueReceivables = transactions.filter((transaction) => transaction.type.toLowerCase() === 'income' && transaction.status.toLowerCase() !== 'paid' && (() => { const due = parseDueDate(transaction.dueDate); return due ? due.getTime() < today.getTime() : transaction.status.toLowerCase() === 'overdue'; })());
+  const overdueReceivablesValue = overdueReceivables.reduce((sum, transaction) => sum + amountValue(transaction.amount), 0);
+  const payablesDueSoon = transactions.filter((transaction) => transaction.type.toLowerCase() === 'expense' && transaction.status.toLowerCase() !== 'paid' && (() => { const due = parseDueDate(transaction.dueDate); if (!due) return false; const days = (due.getTime() - today.getTime()) / 86400000; return days >= 0 && days <= 7; })());
+  const payablesDueSoonValue = payablesDueSoon.reduce((sum, transaction) => sum + amountValue(transaction.amount), 0);
+  const currentAttentionItems = [
+    { type: 'approvals' as const, title: `${pendingApprovals.length} request${pendingApprovals.length === 1 ? '' : 's'} awaiting review`, detail: `${money(pendingApprovalValue, true)} total value` },
+    { type: 'receivables' as const, title: `${overdueReceivables.length} invoice${overdueReceivables.length === 1 ? '' : 's'} overdue`, detail: `${money(overdueReceivablesValue, true)} outstanding` },
+    { type: 'documents' as const, title: `${missingDocuments} document${missingDocuments === 1 ? '' : 's'} missing evidence`, detail: missingDocuments > 0 ? 'Open the Documents workspace to resolve' : 'All uploaded documents are verified' },
+    { type: 'payables' as const, title: `${payablesDueSoon.length} payment${payablesDueSoon.length === 1 ? '' : 's'} due this week`, detail: `${money(payablesDueSoonValue, true)} scheduled` },
+  ].map((item) => ({ ...item, ...attentionMeta[item.type] }));
   const visibleAttention = attentionFilter === 'all' ? currentAttentionItems : currentAttentionItems.filter((item) => item.type === attentionFilter);
   return (
     <div className="space-y-6">
