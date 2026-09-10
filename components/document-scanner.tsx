@@ -249,7 +249,7 @@ function parseDocument(text: string): ScannedTransaction {
   const subtotal = labeledAmount(lines, ['sub total', 'subtotal', 'net amount', 'amount before tax']);
   const tax = labeledAmount(lines, ['tax amount', 'vat amount', 'gst amount', 'sales tax', 'vat', 'gst', 'tax']);
   const allAmounts = extractAmounts(cleaned); const amount = total || (allAmounts.length ? Math.max(...allAmounts).toFixed(2) : '');
-  const party = cleanValue(labeledText(lines, ['vendor', 'supplier', 'merchant', 'bill from', 'sold by', 'from', 'customer', 'client'])) || lines.find((line, index) => index < 10 && isLikelyParty(line)) || '';
+  const party = cleanValue(labeledText(lines, ['vendor', 'supplier', 'merchant', 'merchant name', 'bill from', 'sold by', 'beneficiary', 'beneficiary name', 'payee', 'payer', 'sender', 'paid to', 'received from', 'from', 'customer', 'client'])) || lines.find((line, index) => index < 10 && isLikelyParty(line)) || '';
   const description = findDescription(lines, cleaned);
   const paymentMethodMatch = cleaned.match(/\b(?:payment method|paid by|method)\s*[:#-]?\s*(cash|credit card|debit card|card|bank transfer|wire transfer|ach|cheque|check)\b/i)?.[1] || cleaned.match(/\b(cash|credit card|debit card|bank transfer|wire transfer|ach|cheque)\b/i)?.[1] || '';
   const paymentMethod = paymentMethodMatch.replace(/\b\w/g, (character) => character.toUpperCase());
@@ -317,6 +317,6 @@ function extractAmounts(value: string) {
 }
 function detectCurrency(value: string) { if (/\bKHR\b|៛/i.test(value)) return 'KHR'; if (/\bEUR\b|€/i.test(value)) return 'EUR'; if (/\bGBP\b|£/i.test(value)) return 'GBP'; if (/\bTHB\b|฿/i.test(value)) return 'THB'; if (/\bUSD\b|US\$|\$/i.test(value)) return 'USD'; return ''; }
 function categorize(value: string, type: 'Income' | 'Expense') { if (type === 'Income') return /service|consult/i.test(value) ? 'Service revenue' : 'Product revenue'; if (/software|subscription|cloud|hosting/i.test(value)) return 'Software & subscriptions'; if (/freight|delivery|shipping|logistics/i.test(value)) return 'Freight & delivery'; if (/rent|facility|utilities|electric|water/i.test(value)) return 'Facilities'; if (/marketing|advertis/i.test(value)) return 'Marketing services'; if (/travel|hotel|flight|taxi/i.test(value)) return 'Travel'; if (/office|supplies|stationery/i.test(value)) return 'Office supplies'; return 'Scanned document'; }
-function isLikelyParty(line: string) { return /[A-Za-z]{3}/.test(line) && line.length >= 3 && line.length <= 80 && !/(invoice|receipt|tax|total|amount|date|bill|statement|address|phone|email|www\.|page|description|quantity|price)/i.test(line) && !/^\d/.test(line); }
+function isLikelyParty(line: string) { return /[A-Za-z]{3}/.test(line) && line.length >= 3 && line.length <= 80 && !/(invoice|receipt|tax|total|amount|date|bill|statement|address|phone|email|www\.|page|description|quantity|price|swift|iban|bank|account\s*(?:no|number)?|routing|sort\s*code|currency|exchange\s*rate|reference|transaction\s*id|qr\s*code|branch)/i.test(line) && !/^\d/.test(line); }
 function cleanValue(value: string) { return value.replace(/^[:#\-\s]+|\s{2,}/g, ' ').trim(); }
 function escapeRegExp(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
