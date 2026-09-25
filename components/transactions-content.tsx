@@ -32,6 +32,8 @@ import {
   DocumentScanner,
   type ScannedTransaction,
 } from '@/components/document-scanner';
+import { useLanguage } from '@/lib/i18n';
+import { departmentLabels, statusLabels, taxTreatmentLabels, translateEnum, txTypeLabels } from '@/lib/translations';
 
 type TransactionRow = {
   id: string;
@@ -97,6 +99,7 @@ export function TransactionsContent({
 }: {
   type?: 'All' | 'Income' | 'Expense';
 }) {
+  const { t, lang } = useLanguage();
   const [records, setRecords] = useState<TransactionRow[]>(initialRows);
   const [loadingRecords, setLoadingRecords] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -115,6 +118,7 @@ export function TransactionsContent({
     null,
   );
   const [notice, setNotice] = useState('');
+  const [noticeIsError, setNoticeIsError] = useState(false);
   const [dateFrom, setDateFrom] = useState(() => currentMonthRange().from);
   const [dateTo, setDateTo] = useState(() => currentMonthRange().to);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -123,6 +127,11 @@ export function TransactionsContent({
   const [draft, setDraft] = useState<TransactionDraft>(() => blankDraft(type));
   const [selected, setSelected] = useState<TransactionRow | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const showNotice = (message: string, isError: boolean) => {
+    setNotice(message);
+    setNoticeIsError(isError);
+  };
 
   const typeRows = useMemo(
     () =>
@@ -145,30 +154,30 @@ export function TransactionsContent({
   );
   const title =
     type === 'Income'
-      ? 'Income register'
+      ? t('tx.titleIncome')
       : type === 'Expense'
-        ? 'Expense register'
-        : 'Transaction register';
+        ? t('tx.titleExpense')
+        : t('tx.titleAll');
   const copy =
     type === 'Income'
-      ? 'Track recognized revenue, collections, and supporting invoices.'
+      ? t('tx.copyIncome')
       : type === 'Expense'
-        ? 'Control operating spend, evidence, approvals, and payment status.'
-        : 'Review, trace, and control all financial activity.';
+        ? t('tx.copyExpense')
+        : t('tx.copyAll');
   const scopeMismatch =
     type !== 'All' && typeRows.length === 0 && records.length > 0;
   const emptyTitle =
     records.length === 0
-      ? 'No transactions in this register'
+      ? t('tx.emptyNoneTitle')
       : scopeMismatch
-        ? `${records.length} saved transaction${records.length === 1 ? '' : 's'} found outside ${type.toLowerCase()}`
-        : 'No matching transactions';
+        ? t('tx.emptyScopeMismatchTitle', { count: records.length, plural: records.length === 1 ? '' : 's', type: translateEnum(txTypeLabels, lang, type).toLowerCase() })
+        : t('tx.emptyNoMatchTitle');
   const emptyCopy =
     records.length === 0
-      ? 'Create, scan, or OCR-import a transaction.'
+      ? t('tx.emptyNoneCopy')
       : scopeMismatch
-        ? 'Open All Transactions to review the saved records and their transaction types.'
-        : 'Adjust or clear the active filters.';
+        ? t('tx.emptyScopeMismatchCopy')
+        : t('tx.emptyNoMatchCopy');
 
   useEffect(() => {
     let active = true;
@@ -179,7 +188,7 @@ export function TransactionsContent({
           error?: string;
         };
         if (!response.ok)
-          throw new Error(payload.error || 'Transactions could not be loaded.');
+          throw new Error(payload.error || t('tx.noticeLoadFailed'));
         return payload.transactions || [];
       })
       .then((rows) => {
@@ -191,10 +200,11 @@ export function TransactionsContent({
       })
       .catch((loadError) => {
         if (active)
-          setNotice(
+          showNotice(
             loadError instanceof Error
               ? loadError.message
-              : 'Transactions could not be loaded.',
+              : t('tx.noticeLoadFailed'),
+            true,
           );
       })
       .finally(() => {
@@ -203,6 +213,7 @@ export function TransactionsContent({
     return () => {
       active = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
 
   const openNewTransaction = () => {
@@ -254,9 +265,7 @@ export function TransactionsContent({
       !Number.isFinite(numericExchangeRate) ||
       numericExchangeRate <= 0
     ) {
-      setNotice(
-        'Complete customer/vendor, reference, issue date, description, category, amount, and the KHR exchange rate.',
-      );
+      showNotice(t('tx.noticeValidation'), true);
       return;
     }
     const currency = draft.currency || 'USD';
@@ -292,7 +301,7 @@ export function TransactionsContent({
       exchangeRate: draft.currency === 'KHR' ? '1' : draft.exchangeRate,
     };
     setSaving(true);
-    setNotice('Saving transaction…');
+    showNotice(t('tx.noticeSaving'), false);
     try {
       const response = await fetch('/api/transactions', {
         method: 'POST',
@@ -304,7 +313,7 @@ export function TransactionsContent({
         error?: string;
       };
       if (!response.ok || !payload.transaction)
-        throw new Error(payload.error || 'Transaction could not be saved.');
+        throw new Error(payload.error || t('tx.noticeSaveFailed'));
       const saved = payload.transaction;
       setRecords((current) =>
         existing
@@ -313,18 +322,20 @@ export function TransactionsContent({
       );
       setSelected(saved);
       setDialogOpen(false);
-      setNotice(
+      showNotice(
         existing
-          ? `${saved.id} updated and returned to Pending finance review.`
-          : `${saved.id} saved permanently as Pending.`,
+          ? t('tx.noticeUpdated', { id: saved.id })
+          : t('tx.noticeSaved', { id: saved.id }),
+        false,
       );
       setEditingId(null);
       setDraft(blankDraft(type));
     } catch (saveError) {
-      setNotice(
+      showNotice(
         saveError instanceof Error
           ? saveError.message
-          : 'Transaction could not be saved.',
+          : t('tx.noticeSaveFailed'),
+        true,
       );
     } finally {
       setSaving(false);
@@ -345,9 +356,7 @@ export function TransactionsContent({
       exchangeRate: fields.currency === 'KHR' ? '1' : '',
     });
     setScannerMode(null);
-    setNotice(
-      'Scanned fields were auto-filled. Confirm Cambodia VAT treatment and the KHR exchange rate before saving.',
-    );
+    showNotice(t('tx.noticeScanApplied'), false);
     setDialogOpen(true);
   };
 
@@ -406,7 +415,7 @@ export function TransactionsContent({
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <p className="mb-1 text-xs text-muted-foreground">
-            Finance / {type === 'All' ? 'Transactions' : type}
+            {t('tx.breadcrumbFinance')} / {translateEnum(txTypeLabels, lang, type)}
           </p>
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
             {title}
@@ -419,33 +428,33 @@ export function TransactionsContent({
             download
             className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-input bg-card px-3 text-sm font-medium shadow-xs transition-colors hover:bg-muted"
           >
-            <Download className="size-4" /> Export
+            <Download className="size-4" /> {t('tx.export')}
           </a>
           <Button
             variant="outline"
             className="bg-card"
             onClick={() => setScannerMode('upload')}
-            title="Upload or drop a PNG, JPG, or PDF"
+            title={t('tx.scanDocumentTitle')}
           >
-            <FileCheck2 /> Scan document
+            <FileCheck2 /> {t('tx.scanDocument')}
           </Button>
           <Button
             variant="outline"
             className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
             onClick={() => setScannerMode('camera')}
-            title="Capture a document with your phone or live camera"
+            title={t('tx.ocrImportTitle')}
           >
-            <ScanLine /> OCR Import
+            <ScanLine /> {t('tx.ocrImport')}
           </Button>
           <Button onClick={openNewTransaction}>
-            <Plus /> New {type === 'All' ? 'transaction' : type.toLowerCase()}
+            <Plus /> {type === 'All' ? t('tx.newTransaction') : type === 'Income' ? t('tx.newIncome') : t('tx.newExpense')}
           </Button>
         </div>
       </div>
       {notice ? (
         <div
           role="status"
-          className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${/(?:required|could not|failed|unavailable|missing|duplicate)/i.test(notice) ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
+          className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${noticeIsError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
         >
           <CheckCircle2 className="size-4" />
           {notice}
@@ -467,7 +476,7 @@ export function TransactionsContent({
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search ID, reference, counterparty or category"
+                placeholder={t('tx.searchPlaceholder')}
                 className="h-9 pl-8"
               />
             </div>
@@ -476,12 +485,9 @@ export function TransactionsContent({
               onChange={(event) => setStatus(event.target.value)}
               className="h-9 rounded-lg border bg-card px-3 text-sm outline-none"
             >
-              <option>All statuses</option>
-              <option>Paid</option>
-              <option>Pending</option>
-              <option>Approved</option>
-              <option>Overdue</option>
-              <option>Missing Document</option>
+              {Object.keys(statusLabels.en).map((value) => (
+                <option key={value} value={value}>{translateEnum(statusLabels, lang, value)}</option>
+              ))}
             </select>
             <Button
               variant="outline"
@@ -491,8 +497,8 @@ export function TransactionsContent({
             >
               <CalendarDays />{' '}
               {dateFrom || dateTo
-                ? `${formatPickerDate(dateFrom) || 'Start'} – ${formatPickerDate(dateTo) || 'Today'}`
-                : 'All dates'}
+                ? `${formatPickerDate(dateFrom, lang) || t('tx.start')} – ${formatPickerDate(dateTo, lang) || t('tx.today')}`
+                : t('tx.allDates')}
             </Button>
             <Button
               variant="outline"
@@ -500,13 +506,13 @@ export function TransactionsContent({
               onClick={() => setShowAdvanced((current) => !current)}
               aria-expanded={showAdvanced}
             >
-              <Filter /> {showAdvanced ? 'Hide filters' : 'More filters'}
+              <Filter /> {showAdvanced ? t('tx.hideFilters') : t('tx.moreFilters')}
             </Button>
           </div>
           {showDatePicker ? (
             <div className="mt-3 grid gap-3 border-t pt-3 sm:grid-cols-[140px_1fr_1fr_auto] sm:items-end">
               <label className="text-xs font-medium">
-                Quick year
+                {t('tx.quickYear')}
                 <select
                   value={
                     dateFrom.endsWith('-01-01') &&
@@ -523,7 +529,7 @@ export function TransactionsContent({
                   }}
                   className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"
                 >
-                  <option value="">Custom</option>
+                  <option value="">{t('tx.custom')}</option>
                   <option>2026</option>
                   <option>2027</option>
                   <option>2028</option>
@@ -532,7 +538,7 @@ export function TransactionsContent({
                 </select>
               </label>
               <label className="text-xs font-medium">
-                From
+                {t('tx.from')}
                 <Input
                   type="date"
                   value={dateFrom}
@@ -543,7 +549,7 @@ export function TransactionsContent({
                 />
               </label>
               <label className="text-xs font-medium">
-                To
+                {t('tx.to')}
                 <Input
                   type="date"
                   value={dateTo}
@@ -560,36 +566,33 @@ export function TransactionsContent({
                   setDateTo('');
                 }}
               >
-                All dates
+                {t('tx.allDates')}
               </Button>
               <p className="text-xs text-muted-foreground sm:col-span-4">
-                The current month is selected automatically. Dates are available
-                through 31 December 2030.
+                {t('tx.dateHelp')}
               </p>
             </div>
           ) : null}
           {showAdvanced ? (
             <div className="mt-3 flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center">
               <label className="text-xs font-medium text-muted-foreground">
-                Department
+                {t('tx.department')}
               </label>
               <select
                 value={departmentFilter}
                 onChange={(event) => setDepartmentFilter(event.target.value)}
                 className="h-9 rounded-lg border bg-card px-3 text-sm"
               >
-                <option>All departments</option>
-                <option>Operations</option>
-                <option>Commercial</option>
-                <option>Technology</option>
-                <option>Marketing</option>
+                {Object.keys(departmentLabels.en).map((value) => (
+                  <option key={value} value={value}>{translateEnum(departmentLabels, lang, value)}</option>
+                ))}
               </select>
               <Button
                 variant="ghost"
                 className="sm:ml-auto"
                 onClick={resetFilters}
               >
-                Reset filters
+                {t('tx.resetFilters')}
               </Button>
             </div>
           ) : null}
@@ -602,11 +605,11 @@ export function TransactionsContent({
             <CardTitle className="flex items-center justify-between">
               <span>
                 {loadingRecords
-                  ? 'Loading transactions…'
-                  : `${filtered.length} transactions`}
+                  ? t('tx.loading')
+                  : t('tx.countTransactions', { count: filtered.length })}
               </span>
               <span className="text-xs font-normal text-muted-foreground">
-                Finance register
+                {t('tx.financeRegister')}
               </span>
             </CardTitle>
           </CardHeader>
@@ -614,13 +617,13 @@ export function TransactionsContent({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Transaction</TableHead>
-                  <TableHead>Counterparty</TableHead>
+                  <TableHead>{t('table.transaction')}</TableHead>
+                  <TableHead>{t('table.counterparty')}</TableHead>
                   <TableHead className="hidden lg:table-cell">
-                    Department
+                    {t('tx.department')}
                   </TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>{t('table.status')}</TableHead>
+                  <TableHead className="text-right">{t('table.amount')}</TableHead>
                   <TableHead className="w-8" />
                 </TableRow>
               </TableHeader>
@@ -637,7 +640,7 @@ export function TransactionsContent({
                     <TableCell>
                       <p className="font-medium">{row.id}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        {row.date} · {row.type}
+                        {row.date} · {translateEnum(txTypeLabels, lang, row.type)}
                       </p>
                     </TableCell>
                     <TableCell>
@@ -647,14 +650,14 @@ export function TransactionsContent({
                       </p>
                     </TableCell>
                     <TableCell className="hidden text-muted-foreground lg:table-cell">
-                      {row.department}
+                      {translateEnum(departmentLabels, lang, row.department)}
                     </TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
                         className={badgeStyles[row.status]}
                       >
-                        {row.status}
+                        {translateEnum(statusLabels, lang, row.status)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs font-semibold">
@@ -686,8 +689,8 @@ export function TransactionsContent({
                       }}
                     >
                       {scopeMismatch
-                        ? 'View all transactions'
-                        : 'Clear filters'}
+                        ? t('tx.viewAllTransactions')
+                        : t('tx.clearFilters')}
                     </Button>
                   ) : null}
                 </div>
@@ -701,7 +704,7 @@ export function TransactionsContent({
             <CardHeader className="border-b py-4">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-muted-foreground">
-                  Transaction detail
+                  {t('tx.detailTitle')}
                 </p>
                 <CardTitle className="mt-1">{selected.id}</CardTitle>
               </div>
@@ -709,7 +712,7 @@ export function TransactionsContent({
             <CardContent className="space-y-5 p-5">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs text-muted-foreground">Total amount</p>
+                  <p className="text-xs text-muted-foreground">{t('tx.totalAmount')}</p>
                   <p className="metric-value mt-1 text-2xl font-semibold">
                     {selected.amount}
                   </p>
@@ -718,76 +721,75 @@ export function TransactionsContent({
                   variant="outline"
                   className={badgeStyles[selected.status]}
                 >
-                  {selected.status}
+                  {translateEnum(statusLabels, lang, selected.status)}
                 </Badge>
               </div>
               <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-xs">
-                <Detail label="Counterparty" value={selected.party} />
-                <Detail label="Reference" value={selected.reference} />
-                <Detail label="Issue date" value={selected.date} />
-                <Detail label="Department" value={selected.department} />
-                <Detail label="Category" value={selected.category} />
-                <Detail label="Responsible" value={selected.owner} />
-                <Detail label="Approval" value={selected.approval} />
+                <Detail label={t('table.counterparty')} value={selected.party} />
+                <Detail label={t('field.reference')} value={selected.reference} />
+                <Detail label={t('field.issueDate')} value={selected.date} />
+                <Detail label={t('tx.department')} value={translateEnum(departmentLabels, lang, selected.department)} />
+                <Detail label={t('table.category')} value={selected.category} />
+                <Detail label={t('field.responsible')} value={selected.owner} />
+                <Detail label={t('field.approval')} value={selected.approval} />
                 {selected.dueDate ? (
-                  <Detail label="Due date" value={selected.dueDate} />
+                  <Detail label={t('field.dueDate')} value={selected.dueDate} />
                 ) : null}
                 {selected.tax ? (
                   <Detail
-                    label="Tax / VAT"
+                    label={t('field.taxVat')}
                     value={`${selected.currency || 'KHR'} ${selected.tax}`}
                   />
                 ) : null}
                 {selected.taxTreatment ? (
-                  <Detail label="Tax treatment" value={selected.taxTreatment} />
+                  <Detail label={t('field.taxTreatment')} value={translateEnum(taxTreatmentLabels, lang, selected.taxTreatment)} />
                 ) : null}
                 {selected.exchangeRate ? (
                   <Detail
-                    label="KHR exchange rate"
+                    label={t('field.exchangeRate')}
                     value={selected.exchangeRate}
                   />
                 ) : null}
                 {selected.paymentMethod ? (
                   <Detail
-                    label="Payment method"
+                    label={t('field.paymentMethod')}
                     value={selected.paymentMethod}
                   />
                 ) : null}
                 {selected.purchaseOrder ? (
                   <Detail
-                    label="Purchase order"
+                    label={t('field.purchaseOrder')}
                     value={selected.purchaseOrder}
                   />
                 ) : null}
               </dl>
               {selected.description ? (
                 <div className="rounded-xl border bg-muted/20 p-3 text-xs">
-                  <p className="text-muted-foreground">Description</p>
+                  <p className="text-muted-foreground">{t('field.description')}</p>
                   <p className="mt-1">{selected.description}</p>
                 </div>
               ) : null}
               <div className="rounded-xl border bg-muted/30 p-3">
                 <div className="flex items-center gap-2 text-xs font-semibold">
-                  <ArrowLeftRight className="size-4 text-primary" /> Balanced
-                  journal
+                  <ArrowLeftRight className="size-4 text-primary" /> {t('tx.balancedJournal')}
                 </div>
                 <div className="mt-3 flex justify-between text-xs">
-                  <span className="text-muted-foreground">Debit</span>
+                  <span className="text-muted-foreground">{t('tx.debit')}</span>
                   <span className="font-mono">{selected.amount}</span>
                 </div>
                 <div className="mt-2 flex justify-between text-xs">
-                  <span className="text-muted-foreground">Credit</span>
+                  <span className="text-muted-foreground">{t('tx.credit')}</span>
                   <span className="font-mono">{selected.amount}</span>
                 </div>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-xs">
                   <FileCheck2 className="size-4 text-emerald-600" />
-                  <span>Supporting voucher reference recorded</span>
+                  <span>{t('tx.voucherRecorded')}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <ShieldCheck className="size-4 text-emerald-600" />
-                  <span>Audit trail intact</span>
+                  <span>{t('tx.auditTrail')}</span>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -797,10 +799,10 @@ export function TransactionsContent({
                     window.location.href = '/documents';
                   }}
                 >
-                  View documents
+                  {t('tx.viewDocuments')}
                 </Button>
                 <Button onClick={() => openEditTransaction(selected)}>
-                  <Pencil /> Edit transaction
+                  <Pencil /> {t('tx.editTransaction')}
                 </Button>
               </div>
             </CardContent>
@@ -808,14 +810,14 @@ export function TransactionsContent({
         ) : (
           <Card className="h-fit gap-0 xl:sticky xl:top-20">
             <CardHeader className="border-b py-4">
-              <CardTitle>Transaction detail</CardTitle>
+              <CardTitle>{t('tx.detailTitle')}</CardTitle>
             </CardHeader>
             <CardContent className="grid min-h-56 place-items-center p-6 text-center">
               <div>
                 <FileCheck2 className="mx-auto mb-3 size-8 text-muted-foreground" />
-                <p className="font-medium">No transaction selected</p>
+                <p className="font-medium">{t('tx.noSelectionTitle')}</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Create or import a transaction to review its details.
+                  {t('tx.noSelectionCopy')}
                 </p>
               </div>
             </CardContent>
@@ -841,12 +843,12 @@ export function TransactionsContent({
             <div className="flex items-start justify-between border-b p-5">
               <div>
                 <h2 className="text-xl font-semibold">
-                  {editingId ? `Edit ${editingId}` : 'Review transaction'}
+                  {editingId ? t('tx.editTitle', { id: editingId }) : t('tx.reviewTransaction')}
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {editingId
-                    ? 'Changes return the record to Pending finance review and remain traceable.'
-                    : 'Confirm scanned values. Saving creates a Pending record for finance review.'}
+                    ? t('tx.editSubtitle')
+                    : t('tx.newSubtitle')}
                 </p>
               </div>
               <Button
@@ -860,7 +862,7 @@ export function TransactionsContent({
               </Button>
             </div>
             <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
-              <Field label="Transaction type">
+              <Field label={t('field.transactionType')}>
                 <select
                   value={draft.type}
                   disabled={type !== 'All'}
@@ -872,11 +874,11 @@ export function TransactionsContent({
                   }
                   className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"
                 >
-                  <option>Income</option>
-                  <option>Expense</option>
+                  <option value="Income">{translateEnum(txTypeLabels, lang, 'Income')}</option>
+                  <option value="Expense">{translateEnum(txTypeLabels, lang, 'Expense')}</option>
                 </select>
               </Field>
-              <Field label="Document type">
+              <Field label={t('field.documentType')}>
                 <Input
                   value={draft.documentType}
                   onChange={(event) =>
@@ -885,7 +887,7 @@ export function TransactionsContent({
                   className="mt-2"
                 />
               </Field>
-              <Field label="Issue date">
+              <Field label={t('field.issueDate')}>
                 <Input
                   required
                   type="date"
@@ -898,7 +900,7 @@ export function TransactionsContent({
                   className="mt-2"
                 />
               </Field>
-              <Field label="Due date">
+              <Field label={t('field.dueDate')}>
                 <Input
                   type="date"
                   min={draft.date || '2020-01-01'}
@@ -910,7 +912,7 @@ export function TransactionsContent({
                   className="mt-2"
                 />
               </Field>
-              <Field label="Invoice / Receipt no.">
+              <Field label={t('field.invoiceReceiptNo')}>
                 <Input
                   required
                   value={draft.reference}
@@ -920,7 +922,7 @@ export function TransactionsContent({
                   className="mt-2"
                 />
               </Field>
-              <Field label="Purchase order">
+              <Field label={t('field.purchaseOrder')}>
                 <Input
                   value={draft.purchaseOrder}
                   onChange={(event) =>
@@ -929,7 +931,7 @@ export function TransactionsContent({
                   className="mt-2"
                 />
               </Field>
-              <Field label="Customer / Vendor">
+              <Field label={t('field.customerVendor')}>
                 <Input
                   required
                   value={draft.party}
@@ -939,7 +941,7 @@ export function TransactionsContent({
                   className="mt-2"
                 />
               </Field>
-              <Field label="Department">
+              <Field label={t('tx.department')}>
                 <select
                   value={draft.department}
                   onChange={(event) =>
@@ -947,13 +949,12 @@ export function TransactionsContent({
                   }
                   className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"
                 >
-                  <option>Operations</option>
-                  <option>Commercial</option>
-                  <option>Technology</option>
-                  <option>Marketing</option>
+                  {Object.keys(departmentLabels.en).filter((value) => value !== 'All departments').map((value) => (
+                    <option key={value} value={value}>{translateEnum(departmentLabels, lang, value)}</option>
+                  ))}
                 </select>
               </Field>
-              <Field label="Category">
+              <Field label={t('table.category')}>
                 <Input
                   required
                   value={draft.category}
@@ -963,7 +964,7 @@ export function TransactionsContent({
                   className="mt-2"
                 />
               </Field>
-              <Field label="Currency">
+              <Field label={t('field.currency')}>
                 <Input
                   value={draft.currency}
                   onChange={(event) => {
@@ -977,20 +978,18 @@ export function TransactionsContent({
                   className="mt-2"
                 />
               </Field>
-              <Field label="Cambodia VAT treatment">
+              <Field label={t('field.vatTreatment')}>
                 <select
                   value={draft.taxTreatment}
                   onChange={(event) => updateTaxTreatment(event.target.value)}
                   className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"
                 >
-                  <option>Standard VAT 10%</option>
-                  <option>Zero-rated 0%</option>
-                  <option>Exempt</option>
-                  <option>Non-taxable</option>
-                  <option>Review required</option>
+                  {Object.keys(taxTreatmentLabels.en).map((value) => (
+                    <option key={value} value={value}>{translateEnum(taxTreatmentLabels, lang, value)}</option>
+                  ))}
                 </select>
               </Field>
-              <Field label="KHR exchange rate">
+              <Field label={t('field.exchangeRate')}>
                 <Input
                   required
                   type="number"
@@ -1004,7 +1003,7 @@ export function TransactionsContent({
                   className="mt-2"
                 />
               </Field>
-              <Field label="Subtotal">
+              <Field label={t('field.subtotal')}>
                 <Input
                   type="number"
                   min="0"
@@ -1014,7 +1013,7 @@ export function TransactionsContent({
                   className="mt-2"
                 />
               </Field>
-              <Field label="Tax / VAT">
+              <Field label={t('field.taxVat')}>
                 <Input
                   type="number"
                   min="0"
@@ -1024,7 +1023,7 @@ export function TransactionsContent({
                   className="mt-2"
                 />
               </Field>
-              <Field label="Total amount">
+              <Field label={t('tx.totalAmount')}>
                 <Input
                   required
                   type="number"
@@ -1037,7 +1036,7 @@ export function TransactionsContent({
                   className="mt-2"
                 />
               </Field>
-              <Field label="Statutory KHR equivalent">
+              <Field label={t('field.statutoryKhr')}>
                 <Input
                   value={
                     Number(draft.amount) > 0 &&
@@ -1054,11 +1053,11 @@ export function TransactionsContent({
                       : ''
                   }
                   disabled
-                  placeholder="Calculated from total × rate"
+                  placeholder={t('field.statutoryKhrPlaceholder')}
                   className="mt-2"
                 />
               </Field>
-              <Field label="Payment method">
+              <Field label={t('field.paymentMethod')}>
                 <Input
                   value={draft.paymentMethod}
                   onChange={(event) =>
@@ -1068,7 +1067,7 @@ export function TransactionsContent({
                 />
               </Field>
               <label className="text-xs font-medium sm:col-span-2 lg:col-span-3">
-                Description
+                {t('field.description')}
                 <textarea
                   required
                   value={draft.description}
@@ -1087,14 +1086,14 @@ export function TransactionsContent({
                 onClick={() => setDialogOpen(false)}
                 disabled={saving}
               >
-                Cancel
+                {t('tx.cancel')}
               </Button>
               <Button type="submit" disabled={saving}>
                 {saving
-                  ? 'Saving…'
+                  ? t('tx.saving')
                   : editingId
-                    ? 'Save changes for review'
-                    : 'Save as Pending'}
+                    ? t('tx.saveChanges')
+                    : t('tx.savePending')}
               </Button>
             </div>
           </form>
@@ -1133,10 +1132,10 @@ function isWithinDateRange(value: string, from: string, to: string) {
   if (to && timestamp > Date.parse(`${to}T23:59:59`)) return false;
   return true;
 }
-function formatPickerDate(value: string) {
+function formatPickerDate(value: string, lang: 'en' | 'km') {
   if (!value) return '';
   const date = new Date(`${value}T00:00:00`);
-  return new Intl.DateTimeFormat('en-GB', {
+  return new Intl.DateTimeFormat(lang === 'km' ? 'km-KH' : 'en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',

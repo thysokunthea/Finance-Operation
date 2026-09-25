@@ -23,6 +23,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
+import { useLanguage } from '@/lib/i18n';
+import { departmentLabels, gdtFilingLabels, recordLanguageLabels, statusLabels, taxpayerClassLabels, translateEnum, type Lang } from '@/lib/translations';
 
 type Kind =
   | 'requests'
@@ -74,6 +76,7 @@ function money(value: number, compact = false) {
 }
 
 function Requests() {
+  const { t } = useLanguage();
   const [items, setItems] = useState<PaymentRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
@@ -84,12 +87,13 @@ function Requests() {
     fetch('/api/payment-requests', { cache: 'no-store' })
       .then(async (response) => {
         const payload = (await response.json()) as { requests?: PaymentRequestItem[]; error?: string };
-        if (!response.ok) throw new Error(payload.error || 'Payment requests could not be loaded.');
+        if (!response.ok) throw new Error(payload.error || t('req.loadFailed'));
         setItems(payload.requests || []);
       })
-      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Payment requests could not be loaded.'))
+      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : t('req.loadFailed')))
       .finally(() => setLoading(false));
   };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, []);
 
   const createRequest = async () => {
@@ -101,54 +105,55 @@ function Requests() {
         body: JSON.stringify({ title: 'New expense request', category: 'Operations', amount: 0.01 }),
       });
       const payload = (await response.json()) as { requests?: PaymentRequestItem[]; error?: string };
-      if (!response.ok) throw new Error(payload.error || 'Request could not be created.');
+      if (!response.ok) throw new Error(payload.error || t('req.createFailed'));
       setItems(payload.requests || []);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Request could not be created.');
+      setNotice(error instanceof Error ? error.message : t('req.createFailed'));
     } finally {
       setCreating(false);
     }
   };
 
-  const pendingValue = items.filter((i) => i.status !== 'Approved').reduce((sum, i) => sum + i.amount, 0);
-  const onTime = items.length ? Math.round((items.filter((i) => i.status === 'Approved').length / items.length) * 100) : 100;
+  const pendingValue = items.filter((item) => item.status !== 'Approved').reduce((sum, item) => sum + item.amount, 0);
+  const onTime = items.length ? Math.round((items.filter((item) => item.status === 'Approved').length / items.length) * 100) : 100;
 
   return (
     <div className="space-y-5">
       <Header
-        crumb="Finance / Payment Requests"
-        title="Payment requests"
-        copy="Submit, review, authorize, pay, and close requests in one controlled workflow."
-        action={<Button onClick={createRequest} disabled={creating}>{creating ? 'Creating…' : 'New request'}</Button>}
+        crumb={`${t('tx.breadcrumbFinance')} / ${t('nav.requests')}`}
+        title={t('req.title')}
+        copy={t('req.copy')}
+        action={<Button onClick={createRequest} disabled={creating}>{creating ? t('req.creating') : t('req.newRequest')}</Button>}
       />
       {notice ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{notice}</div> : null}
       <Metrics
         values={[
-          [loading ? '…' : money(pendingValue, true), 'Pending value'],
-          [loading ? '…' : String(items.length), 'Requests in queue'],
-          [loading ? '…' : `${onTime}%`, 'Approved so far'],
+          [loading ? '…' : money(pendingValue, true), t('req.pendingValue')],
+          [loading ? '…' : String(items.length), t('req.requestsInQueue')],
+          [loading ? '…' : `${onTime}%`, t('req.approvedSoFar')],
         ]}
       />
       <ListCard
-        title="Request queue"
-        description="Approval levels are selected from configured amount rules"
+        title={t('req.queueTitle')}
+        description={t('req.queueDesc')}
       >
-        {items.map((r) => (
+        {items.map((item) => (
           <Row
-            key={r.id}
-            title={r.title}
-            subtitle={`${r.id} · ${r.category}`}
-            value={money(r.amount)}
-            status={r.status}
+            key={item.id}
+            title={item.title}
+            subtitle={`${item.id} · ${item.category}`}
+            value={money(item.amount)}
+            status={item.status}
           />
         ))}
-        {!loading && items.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">No payment requests yet.</div> : null}
+        {!loading && items.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">{t('req.noneYet')}</div> : null}
       </ListCard>
     </div>
   );
 }
 
 function Budgets() {
+  const { t } = useLanguage();
   const [lines, setLines] = useState<BudgetLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
@@ -161,12 +166,13 @@ function Budgets() {
     fetch('/api/budgets', { cache: 'no-store' })
       .then(async (response) => {
         const payload = (await response.json()) as { budgets?: BudgetLine[]; error?: string };
-        if (!response.ok) throw new Error(payload.error || 'Budgets could not be loaded.');
+        if (!response.ok) throw new Error(payload.error || t('budgets2.loadFailed'));
         setLines(payload.budgets || []);
       })
-      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Budgets could not be loaded.'))
+      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : t('budgets2.loadFailed')))
       .finally(() => setLoading(false));
   };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, []);
 
   const addBudget = async () => {
@@ -178,45 +184,45 @@ function Budgets() {
         body: JSON.stringify({ department, monthlyLimit: Number(limit) }),
       });
       const payload = (await response.json()) as { budgets?: BudgetLine[]; error?: string };
-      if (!response.ok) throw new Error(payload.error || 'Budget could not be saved.');
+      if (!response.ok) throw new Error(payload.error || t('budgets2.saveFailed'));
       setLines(payload.budgets || []);
       setDepartment('');
       setLimit('');
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Budget could not be saved.');
+      setNotice(error instanceof Error ? error.message : t('budgets2.saveFailed'));
     } finally {
       setSaving(false);
     }
   };
 
-  const totalBudget = lines.reduce((sum, l) => sum + l.monthlyLimit, 0);
-  const totalActual = lines.reduce((sum, l) => sum + l.actual, 0);
+  const totalBudget = lines.reduce((sum, line) => sum + line.monthlyLimit, 0);
+  const totalActual = lines.reduce((sum, line) => sum + line.actual, 0);
 
   return (
     <div className="space-y-5">
       <Header
-        crumb="Finance / Budgets"
-        title="Budget control"
-        copy="Monitor actual spending against department limits before they are exceeded."
+        crumb={`${t('tx.breadcrumbFinance')} / ${t('nav.budgets')}`}
+        title={t('budget.title')}
+        copy={t('budgets2.copy')}
       />
       {notice ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{notice}</div> : null}
       <Metrics
         values={[
-          [loading ? '…' : money(totalBudget, true), 'Monthly budget'],
-          [loading ? '…' : money(totalActual, true), 'Actual spending'],
-          [loading ? '…' : money(Math.max(0, totalBudget - totalActual), true), 'Remaining'],
+          [loading ? '…' : money(totalBudget, true), t('budgets2.monthlyBudget')],
+          [loading ? '…' : money(totalActual, true), t('budgets2.actualSpending')],
+          [loading ? '…' : money(Math.max(0, totalBudget - totalActual), true), t('budget.remaining')],
         ]}
       />
       <Card>
         <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-end">
-          <label className="flex-1 text-xs font-medium">Department<Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Technology" className="mt-2" /></label>
-          <label className="w-40 text-xs font-medium">Monthly limit (USD)<Input value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" placeholder="0" className="mt-2" /></label>
-          <Button onClick={addBudget} disabled={saving || !department || !limit}>{saving ? 'Saving…' : 'Set budget'}</Button>
+          <label className="flex-1 text-xs font-medium">{t('tx.department')}<Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder={t('budgets2.departmentPlaceholder')} className="mt-2" /></label>
+          <label className="w-40 text-xs font-medium">{t('budgets2.monthlyLimitUsd')}<Input value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" placeholder="0" className="mt-2" /></label>
+          <Button onClick={addBudget} disabled={saving || !department || !limit}>{saving ? t('tx.saving') : t('budgets2.setBudget')}</Button>
         </CardContent>
       </Card>
       <ListCard
-        title="Department utilization"
-        description="Actual spend this month compared with the configured budget"
+        title={t('budgets2.utilizationTitle')}
+        description={t('budgets2.utilizationDesc')}
       >
         {lines.map((line) => (
           <div
@@ -227,9 +233,9 @@ function Budgets() {
               <p className="text-sm font-medium">{line.department}</p>
               <Progress value={Math.min(100, line.utilization)} className="mt-2 h-1.5" />
             </div>
-            <Value label="Budget" value={money(line.monthlyLimit)} />
-            <Value label="Actual" value={money(line.actual)} />
-            <Value label="Committed" value={money(0)} />
+            <Value label={t('nav.budgets')} value={money(line.monthlyLimit)} />
+            <Value label={t('budget.actual')} value={money(line.actual)} />
+            <Value label={t('budget.committed')} value={money(0)} />
             <Badge
               variant="outline"
               className={
@@ -240,17 +246,18 @@ function Budgets() {
                     : 'border-emerald-200 bg-emerald-50 text-emerald-700'
               }
             >
-              {line.utilization}% used
+              {line.utilization}% {t('budget.used')}
             </Badge>
           </div>
         ))}
-        {!loading && lines.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">No department budgets configured yet.</div> : null}
+        {!loading && lines.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">{t('budgets2.noneYet')}</div> : null}
       </ListCard>
     </div>
   );
 }
 
 function Accounting() {
+  const { t } = useLanguage();
   const [lines, setLines] = useState<AccountLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
@@ -259,7 +266,7 @@ function Accounting() {
     fetch('/api/transactions', { cache: 'no-store' })
       .then(async (response) => {
         const payload = (await response.json()) as { transactions?: { type: string; category: string; amount: string }[]; error?: string };
-        if (!response.ok) throw new Error(payload.error || 'Accounting data could not be loaded.');
+        if (!response.ok) throw new Error(payload.error || t('acct.loadFailed'));
         const grouped = new Map<string, AccountLine>();
         for (const transaction of payload.transactions || []) {
           const key = `${transaction.type}::${transaction.category}`;
@@ -270,31 +277,32 @@ function Accounting() {
         }
         setLines([...grouped.values()].sort((a, b) => b.total - a.total));
       })
-      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Accounting data could not be loaded.'))
+      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : t('acct.loadFailed')))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const totalIncome = lines.filter((l) => l.type === 'Income').reduce((sum, l) => sum + l.total, 0);
-  const totalExpense = lines.filter((l) => l.type === 'Expense').reduce((sum, l) => sum + l.total, 0);
+  const totalIncome = lines.filter((line) => line.type === 'Income').reduce((sum, line) => sum + line.total, 0);
+  const totalExpense = lines.filter((line) => line.type === 'Expense').reduce((sum, line) => sum + line.total, 0);
 
   return (
     <div className="space-y-5">
       <Header
-        crumb="Finance / Accounting"
-        title="Accounting summary"
-        copy="A category-level rollup of posted transactions, grouped like a lightweight chart of accounts."
+        crumb={`${t('tx.breadcrumbFinance')} / ${t('nav.accounting')}`}
+        title={t('acct.title')}
+        copy={t('acct.copy')}
       />
       {notice ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{notice}</div> : null}
       <Metrics
         values={[
-          [loading ? '…' : money(totalIncome, true), 'Total income'],
-          [loading ? '…' : money(totalExpense, true), 'Total expense'],
-          [loading ? '…' : money(totalIncome - totalExpense, true), 'Net position'],
+          [loading ? '…' : money(totalIncome, true), t('acct.totalIncome')],
+          [loading ? '…' : money(totalExpense, true), t('acct.totalExpense')],
+          [loading ? '…' : money(totalIncome - totalExpense, true), t('acct.netPosition')],
         ]}
       />
       <ListCard
-        title="Accounts by category"
-        description="Income and expense categories rolled up from recorded transactions"
+        title={t('acct.accountsByCategory')}
+        description={t('acct.accountsByCategoryDesc')}
       >
         {lines.map((line) => (
           <div
@@ -305,24 +313,26 @@ function Accounting() {
               <p className="text-sm font-medium">{line.category}</p>
               <p className="text-xs text-muted-foreground">{line.type}</p>
             </div>
-            <Value label="Total" value={money(line.total)} />
-            <Value label="Entries" value={String(line.count)} />
+            <Value label={t('acct.total')} value={money(line.total)} />
+            <Value label={t('acct.entries')} value={String(line.count)} />
             <Badge variant="outline" className={line.type === 'Income' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-700'}>
               {line.type}
             </Badge>
           </div>
         ))}
-        {!loading && lines.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">No transactions recorded yet.</div> : null}
+        {!loading && lines.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">{t('acct.noneYet')}</div> : null}
       </ListCard>
     </div>
   );
 }
 
 function Approvals() {
+  const { t, lang } = useLanguage();
   const [items, setItems] = useState<ApprovalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
   const [notice, setNotice] = useState('');
+  const [noticeIsError, setNoticeIsError] = useState(false);
   useEffect(() => {
     let active = true;
     fetch('/api/approvals', { cache: 'no-store' })
@@ -332,19 +342,17 @@ function Approvals() {
           error?: string;
         };
         if (!response.ok)
-          throw new Error(payload.error || 'Approvals could not be loaded.');
+          throw new Error(payload.error || t('appr.loadFailed'));
         return payload.approvals || [];
       })
       .then((approvals) => {
         if (active) setItems(approvals);
       })
       .catch((error: unknown) => {
-        if (active)
-          setNotice(
-            error instanceof Error
-              ? error.message
-              : 'Approvals could not be loaded.',
-          );
+        if (active) {
+          setNotice(error instanceof Error ? error.message : t('appr.loadFailed'));
+          setNoticeIsError(true);
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -352,11 +360,13 @@ function Approvals() {
     return () => {
       active = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const approve = async (id: string) => {
     if (busyId) return;
     setBusyId(id);
-    setNotice('Saving approval…');
+    setNotice(t('appr.savingApproval'));
+    setNoticeIsError(false);
     try {
       const response = await fetch('/api/approvals', {
         method: 'POST',
@@ -368,14 +378,14 @@ function Approvals() {
         error?: string;
       };
       if (!response.ok || !payload.approval)
-        throw new Error(payload.error || 'Approval could not be saved.');
+        throw new Error(payload.error || t('appr.saveFailed'));
       setItems((current) => current.filter((item) => item.id !== id));
-      setNotice(`${id} approved. The decision was saved with an audit trail.`);
+      setNotice(t('appr.approvedNotice', { id }));
+      setNoticeIsError(false);
       window.dispatchEvent(new Event('ledgerflow-approvals-changed'));
     } catch (error) {
-      setNotice(
-        error instanceof Error ? error.message : 'Approval could not be saved.',
-      );
+      setNotice(error instanceof Error ? error.message : t('appr.saveFailed'));
+      setNoticeIsError(true);
     } finally {
       setBusyId('');
     }
@@ -393,28 +403,28 @@ function Approvals() {
   return (
     <div className="space-y-5">
       <Header
-        crumb="Workflow / Approvals"
-        title="Approval center"
-        copy="Review evidence, coding, and authority before finance processes payment."
+        crumb={`${t('section.workflow')} / ${t('nav.approvals')}`}
+        title={t('appr.title')}
+        copy={t('appr.copy')}
       />
       {notice ? (
         <div
           role="status"
-          className={`rounded-xl border px-4 py-3 text-sm ${/could not|required|not found|rejected/i.test(notice) ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
+          className={`rounded-xl border px-4 py-3 text-sm ${noticeIsError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
         >
           {notice}
         </div>
       ) : null}
       <Metrics
         values={[
-          [loading ? '…' : String(items.length), 'Pending approvals'],
-          [loading ? '…' : valueLabel, 'Value awaiting review'],
-          ['Audited', 'Decision record'],
+          [loading ? '…' : String(items.length), t('appr.pendingApprovals')],
+          [loading ? '…' : valueLabel, t('appr.valueAwaitingReview')],
+          [t('appr.audited'), t('appr.decisionRecord')],
         ]}
       />
       <ListCard
-        title="Items requiring your decision"
-        description="Pending saved transactions are shown here automatically"
+        title={t('appr.itemsTitle')}
+        description={t('appr.itemsDesc')}
       >
         {items.map((item) => (
           <div
@@ -428,11 +438,11 @@ function Approvals() {
               <p className="text-sm font-medium">{item.name}</p>
               <p className="text-xs text-muted-foreground">
                 {item.id}
-                {item.reference ? ` · ${item.reference}` : ''} · Submitted by{' '}
+                {item.reference ? ` · ${item.reference}` : ''} · {t('appr.submittedBy')}{' '}
                 {item.owner}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {item.department || 'No department'} · {item.date}
+                {item.department ? translateEnum(departmentLabels, lang, item.department) : t('appr.noDepartment')} · {item.date}
               </p>
             </div>
             <p className="font-mono text-sm font-semibold">{item.amount}</p>
@@ -441,7 +451,7 @@ function Approvals() {
               disabled={busyId === item.id}
               onClick={() => approve(item.id)}
             >
-              {busyId === item.id ? 'Approving…' : 'Approve'}
+              {busyId === item.id ? t('appr.approving') : t('appr.approve')}
             </Button>
           </div>
         ))}
@@ -449,16 +459,16 @@ function Approvals() {
           <div className="grid min-h-48 place-items-center p-6 text-center">
             <div>
               <CheckCircle2 className="mx-auto mb-3 size-8 text-emerald-600" />
-              <p className="font-medium">No approvals waiting</p>
+              <p className="font-medium">{t('appr.noneWaiting')}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                New or edited transactions will appear here for review.
+                {t('appr.noneWaitingCopy')}
               </p>
             </div>
           </div>
         ) : null}
         {loading ? (
           <div className="grid min-h-48 place-items-center p-6 text-sm text-muted-foreground">
-            Loading saved approvals…
+            {t('appr.loadingApprovals')}
           </div>
         ) : null}
       </ListCard>
@@ -466,11 +476,12 @@ function Approvals() {
   );
 }
 
-function currentPeriodLabel() {
-  return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+function currentPeriodLabel(lang: Lang) {
+  return new Date().toLocaleDateString(lang === 'km' ? 'km-KH' : 'en-US', { month: 'long', year: 'numeric' });
 }
 
 function Closing() {
+  const { t, lang } = useLanguage();
   const [tasks, setTasks] = useState<string[]>([]);
   const [status, setStatus] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -481,12 +492,13 @@ function Closing() {
     fetch('/api/closing', { cache: 'no-store' })
       .then(async (response) => {
         const payload = (await response.json()) as { tasks?: string[]; status?: Record<string, boolean>; error?: string };
-        if (!response.ok) throw new Error(payload.error || 'Closing checklist could not be loaded.');
+        if (!response.ok) throw new Error(payload.error || t('close.loadFailed'));
         setTasks(payload.tasks || []);
         setStatus(payload.status || {});
       })
-      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Closing checklist could not be loaded.'))
+      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : t('close.loadFailed')))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const doneCount = tasks.filter((name) => status[name]).length;
@@ -502,10 +514,10 @@ function Closing() {
         body: JSON.stringify({ taskName: name, completed: next }),
       });
       const payload = (await response.json()) as { status?: Record<string, boolean>; error?: string };
-      if (!response.ok) throw new Error(payload.error || 'Closing task could not be saved.');
+      if (!response.ok) throw new Error(payload.error || t('close.saveFailed'));
       setStatus(payload.status || {});
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Closing task could not be saved.');
+      setNotice(error instanceof Error ? error.message : t('close.saveFailed'));
     } finally {
       setBusy('');
     }
@@ -514,15 +526,15 @@ function Closing() {
   return (
     <div className="space-y-5">
       <Header
-        crumb="Workflow / Monthly Closing"
-        title={`${currentPeriodLabel()} close`}
-        copy="Complete and evidence every control before the accounting period is locked."
+        crumb={`${t('section.workflow')} / ${t('nav.closing')}`}
+        title={t('close.periodClose', { period: currentPeriodLabel(lang) })}
+        copy={t('close.copy')}
         action={
           <Badge
             variant="outline"
             className={progress === 100 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}
           >
-            {progress === 100 ? 'Complete' : 'In progress'}
+            {progress === 100 ? t('close.complete') : t('tasks.inProgress')}
           </Badge>
         }
       />
@@ -530,8 +542,8 @@ function Closing() {
       <Card>
         <CardContent className="p-5">
           <div className="flex justify-between text-sm">
-            <span className="font-medium">Closing progress</span>
-            <span>{loading ? '…' : `${progress}% · ${doneCount}/${tasks.length} complete`}</span>
+            <span className="font-medium">{t('close.progressLabel')}</span>
+            <span>{loading ? '…' : t('close.progressDetail', { percent: progress, done: doneCount, total: tasks.length })}</span>
           </div>
           <Progress value={progress} className="mt-3" />
         </CardContent>
@@ -557,7 +569,7 @@ function Closing() {
               </span>
               <span className="flex-1 text-sm font-medium">{name}</span>
               <span className="text-xs text-muted-foreground">
-                {checked ? 'Complete' : 'Open'}
+                {checked ? t('close.complete') : t('tasks.filterOpen')}
               </span>
             </button>
           );
@@ -587,43 +599,48 @@ function parseAssistantDate(value?: string): Date | null {
   return Number.isFinite(parsed.getTime()) ? parsed : null;
 }
 
-function answerFromData(question: string, rows: AssistantTransaction[], budgets: BudgetLine[]): string {
+function answerFromData(question: string, rows: AssistantTransaction[], budgets: BudgetLine[], t: (key: string, vars?: Record<string, string | number>) => string): string {
   const q = question.toLowerCase();
   const today = new Date(new Date().toDateString());
 
   if (q.includes('overdue') && (q.includes('customer') || q.includes('invoice') || q.includes('receivable'))) {
-    const overdue = rows.filter((r) => r.type.toLowerCase() === 'income' && r.status.toLowerCase() !== 'paid' && (() => { const due = parseAssistantDate(r.dueDate); return due ? due.getTime() < today.getTime() : r.status.toLowerCase() === 'overdue'; })());
-    if (overdue.length === 0) return 'No customer invoices are currently overdue.';
-    const total = overdue.reduce((sum, r) => sum + amountValue(r.amount), 0);
-    const list = overdue.slice(0, 5).map((r) => `${r.party || 'Unknown'} owes ${assistantMoney(amountValue(r.amount))}`).join('; ');
-    return `${overdue.length} customer${overdue.length === 1 ? '' : 's'} overdue: ${list}. Total overdue: ${assistantMoney(total)}.`;
+    const overdue = rows.filter((row) => row.type.toLowerCase() === 'income' && row.status.toLowerCase() !== 'paid' && (() => { const due = parseAssistantDate(row.dueDate); return due ? due.getTime() < today.getTime() : row.status.toLowerCase() === 'overdue'; })());
+    if (overdue.length === 0) return t('asst.noOverdueInvoices');
+    const total = overdue.reduce((sum, row) => sum + amountValue(row.amount), 0);
+    const list = overdue.slice(0, 5).map((row) => t('asst.owesTemplate', { party: row.party || t('asst.unknown'), amount: assistantMoney(amountValue(row.amount)) })).join('; ');
+    return t('asst.overdueSummary', { count: overdue.length, plural: overdue.length === 1 ? '' : 's', list, total: assistantMoney(total) });
   }
 
   if (q.includes('over budget') || (q.includes('budget') && q.includes('department'))) {
-    const over = budgets.filter((b) => b.utilization >= 100);
-    if (budgets.length === 0) return 'No department budgets are configured yet. Set them up on the Budgets page.';
-    if (over.length === 0) return `No department is over budget. Highest utilization: ${budgets.slice().sort((a, b) => b.utilization - a.utilization).map((b) => `${b.department} at ${b.utilization}%`)[0] || 'n/a'}.`;
-    return `${over.map((b) => `${b.department} is at ${b.utilization}% of its ${assistantMoney(b.monthlyLimit)} budget`).join('; ')}.`;
+    const over = budgets.filter((budget) => budget.utilization >= 100);
+    if (budgets.length === 0) return t('asst.noBudgetsConfigured');
+    if (over.length === 0) {
+      const top = budgets.slice().sort((a, b) => b.utilization - a.utilization)[0];
+      return t('asst.noneOverBudget', { detail: top ? t('asst.atPercentOfBudget', { department: top.department, percent: top.utilization }) : t('asst.naDetail') });
+    }
+    return `${over.map((budget) => t('asst.overBudgetItem', { department: budget.department, percent: budget.utilization, limit: assistantMoney(budget.monthlyLimit) })).join('; ')}.`;
   }
 
   if (q.includes('payment') && (q.includes('due') || q.includes('week'))) {
-    const dueSoon = rows.filter((r) => r.type.toLowerCase() === 'expense' && r.status.toLowerCase() !== 'paid' && (() => { const due = parseAssistantDate(r.dueDate); if (!due) return false; const days = (due.getTime() - today.getTime()) / 86400000; return days >= 0 && days <= 7; })());
-    if (dueSoon.length === 0) return 'No supplier payments are due in the next 7 days.';
-    const total = dueSoon.reduce((sum, r) => sum + amountValue(r.amount), 0);
-    return `${dueSoon.length} payment${dueSoon.length === 1 ? '' : 's'} due within 7 days, totaling ${assistantMoney(total)}: ${dueSoon.slice(0, 5).map((r) => `${r.party || 'Unknown'} (${assistantMoney(amountValue(r.amount))})`).join('; ')}.`;
+    const dueSoon = rows.filter((row) => row.type.toLowerCase() === 'expense' && row.status.toLowerCase() !== 'paid' && (() => { const due = parseAssistantDate(row.dueDate); if (!due) return false; const days = (due.getTime() - today.getTime()) / 86400000; return days >= 0 && days <= 7; })());
+    if (dueSoon.length === 0) return t('asst.noSupplierPaymentsDue');
+    const total = dueSoon.reduce((sum, row) => sum + amountValue(row.amount), 0);
+    const list = dueSoon.slice(0, 5).map((row) => `${row.party || t('asst.unknown')} (${assistantMoney(amountValue(row.amount))})`).join('; ');
+    return t('asst.paymentsDueSummary', { count: dueSoon.length, plural: dueSoon.length === 1 ? '' : 's', total: assistantMoney(total), list });
   }
 
   const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  const monthRows = rows.filter((r) => {
-    const d = parseAssistantDate(r.date);
-    return d && `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === currentMonth;
+  const monthRows = rows.filter((row) => {
+    const date = parseAssistantDate(row.date);
+    return date && `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` === currentMonth;
   });
-  const revenue = monthRows.filter((r) => r.type.toLowerCase() === 'income').reduce((sum, r) => sum + amountValue(r.amount), 0);
-  const expenses = monthRows.filter((r) => r.type.toLowerCase() === 'expense').reduce((sum, r) => sum + amountValue(r.amount), 0);
-  return `Based on records available to your role, this month's revenue is ${assistantMoney(revenue)}, expenses are ${assistantMoney(expenses)}, and net result is ${assistantMoney(revenue - expenses)}.`;
+  const revenue = monthRows.filter((row) => row.type.toLowerCase() === 'income').reduce((sum, row) => sum + amountValue(row.amount), 0);
+  const expenses = monthRows.filter((row) => row.type.toLowerCase() === 'expense').reduce((sum, row) => sum + amountValue(row.amount), 0);
+  return t('asst.monthlySummary', { revenue: assistantMoney(revenue), expenses: assistantMoney(expenses), net: assistantMoney(revenue - expenses) });
 }
 
 function Assistant() {
+  const { t } = useLanguage();
   const [question, setQuestion] = useState(
     'Which customers have overdue invoices?',
   );
@@ -636,8 +653,8 @@ function Assistant() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/transactions', { cache: 'no-store' }).then((r) => r.json()),
-      fetch('/api/budgets', { cache: 'no-store' }).then((r) => r.json()),
+      fetch('/api/transactions', { cache: 'no-store' }).then((response) => response.json()),
+      fetch('/api/budgets', { cache: 'no-store' }).then((response) => response.json()),
     ])
       .then(([txPayload, budgetPayload]) => {
         setRows(txPayload.transactions || []);
@@ -659,11 +676,11 @@ function Assistant() {
         setAnswer(payload.answer);
         setSource('ai');
       } else {
-        setAnswer(answerFromData(question, rows, budgets));
+        setAnswer(answerFromData(question, rows, budgets, t));
         setSource('rules');
       }
     } catch {
-      setAnswer(answerFromData(question, rows, budgets));
+      setAnswer(answerFromData(question, rows, budgets, t));
       setSource('rules');
     } finally {
       setAsking(false);
@@ -672,9 +689,9 @@ function Assistant() {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <Header
-        crumb="Finance / AI Assistant"
-        title="Finance assistant"
-        copy="Ask questions only across records your current role is authorized to view."
+        crumb={`${t('tx.breadcrumbFinance')} / ${t('nav.assistant')}`}
+        title={t('asst.title')}
+        copy={t('asst.copy')}
       />
       <Card>
         <CardHeader>
@@ -683,22 +700,21 @@ function Assistant() {
               <Bot className="size-5" />
             </span>
             <div>
-              <CardTitle>Ask LedgerFlow</CardTitle>
+              <CardTitle>{t('asst.askLedgerFlow')}</CardTitle>
               <CardDescription>
-                Read-only analysis · no posting or approval authority
+                {t('asst.readOnly')}
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-xl bg-muted/50 p-4 text-sm">
-            Try: “Which department is over budget?” or “What payments are due
-            next week?”
+            {t('asst.tryPrompt')}
           </div>
           {answer ? (
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm leading-6">
               <div className="mb-2 flex items-center gap-2 font-semibold text-primary">
-                <Sparkles className="size-4" /> {source === 'ai' ? 'AI answer grounded in your finance data' : 'Answer from authorized finance data'}
+                <Sparkles className="size-4" /> {source === 'ai' ? t('asst.aiAnswer') : t('asst.rulesAnswer')}
               </div>
               {answer}
             </div>
@@ -726,6 +742,7 @@ function Assistant() {
 }
 
 function SettingsPanel() {
+  const { t, lang } = useLanguage();
   const [settings, setSettings] = useState<ComplianceState>({
     jurisdiction: 'Cambodia',
     reportingFramework: 'CIFRS for SMEs',
@@ -739,6 +756,7 @@ function SettingsPanel() {
     gdtFilingMethod: 'Online',
   });
   const [status, setStatus] = useState('');
+  const [statusIsError, setStatusIsError] = useState(false);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
     fetch('/api/compliance-settings', { cache: 'no-store' })
@@ -749,21 +767,20 @@ function SettingsPanel() {
         };
         if (!response.ok || !payload.settings)
           throw new Error(
-            payload.error || 'Compliance settings could not be loaded.',
+            payload.error || t('settings.loadFailed'),
           );
         setSettings(payload.settings);
       })
-      .catch((error: unknown) =>
-        setStatus(
-          error instanceof Error
-            ? error.message
-            : 'Compliance settings could not be loaded.',
-        ),
-      );
+      .catch((error: unknown) => {
+        setStatus(error instanceof Error ? error.message : t('settings.loadFailed'));
+        setStatusIsError(true);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const save = async () => {
     setSaving(true);
-    setStatus('Saving reviewed compliance profile…');
+    setStatus(t('settings.savingProfile'));
+    setStatusIsError(false);
     try {
       const response = await fetch('/api/compliance-settings', {
         method: 'POST',
@@ -776,16 +793,14 @@ function SettingsPanel() {
       };
       if (!response.ok || !payload.settings)
         throw new Error(
-          payload.error || 'Compliance settings could not be saved.',
+          payload.error || t('settings.saveFailed'),
         );
       setSettings(payload.settings);
-      setStatus('Cambodia compliance profile saved with an audit trail.');
+      setStatus(t('settings.savedProfile'));
+      setStatusIsError(false);
     } catch (error) {
-      setStatus(
-        error instanceof Error
-          ? error.message
-          : 'Compliance settings could not be saved.',
-      );
+      setStatus(error instanceof Error ? error.message : t('settings.saveFailed'));
+      setStatusIsError(true);
     } finally {
       setSaving(false);
     }
@@ -793,30 +808,28 @@ function SettingsPanel() {
   return (
     <div className="space-y-5">
       <Header
-        crumb="Administration / Settings"
-        title="Finance controls"
-        copy="Configure accounting, tax, approval, and automation safeguards."
+        crumb={`${t('section.administration')} / ${t('nav.settings')}`}
+        title={t('settings.title')}
+        copy={t('settings.copy')}
       />
       {status ? (
         <div
           role="status"
-          className={`rounded-xl border px-4 py-3 text-sm ${/could not|must|valid|required/i.test(status) ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
+          className={`rounded-xl border px-4 py-3 text-sm ${statusIsError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
         >
           {status}
         </div>
       ) : null}
       <Card className="border-primary/20">
         <CardHeader>
-          <CardTitle>Cambodia accounting and tax profile</CardTitle>
+          <CardTitle>{t('settings.profileTitle')}</CardTitle>
           <CardDescription>
-            Statutory controls based on ACAR requirements and General Department
-            of Taxation guidance. Confirm the entity classification with your
-            Cambodian accountant or tax adviser.
+            {t('settings.profileDesc')}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className="text-xs font-medium">
-            Reporting framework
+            {t('settings.reportingFramework')}
             <select
               value={settings.reportingFramework}
               onChange={(event) =>
@@ -834,7 +847,7 @@ function SettingsPanel() {
             </select>
           </label>
           <label className="text-xs font-medium">
-            GDT taxpayer classification
+            {t('settings.gdtClassification')}
             <select
               value={settings.taxpayerClassification}
               onChange={(event) =>
@@ -845,14 +858,13 @@ function SettingsPanel() {
               }
               className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"
             >
-              <option>Unconfirmed</option>
-              <option>Small taxpayer</option>
-              <option>Medium taxpayer</option>
-              <option>Large taxpayer</option>
+              {Object.keys(taxpayerClassLabels.en).map((value) => (
+                <option key={value} value={value}>{translateEnum(taxpayerClassLabels, lang, value)}</option>
+              ))}
             </select>
           </label>
           <label className="text-xs font-medium">
-            GDT filing method
+            {t('settings.gdtFilingMethod')}
             <select
               value={settings.gdtFilingMethod}
               onChange={(event) =>
@@ -863,16 +875,17 @@ function SettingsPanel() {
               }
               className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"
             >
-              <option>Online</option>
-              <option>Manual</option>
+              {Object.keys(gdtFilingLabels.en).map((value) => (
+                <option key={value} value={value}>{translateEnum(gdtFilingLabels, lang, value)}</option>
+              ))}
             </select>
           </label>
           <label className="text-xs font-medium">
-            Statutory currency
+            {t('settings.statutoryCurrency')}
             <Input value="KHR" disabled className="mt-2" />
           </label>
           <label className="text-xs font-medium">
-            Secondary transaction currency
+            {t('settings.secondaryCurrency')}
             <Input
               value={settings.secondaryCurrency}
               onChange={(event) =>
@@ -885,7 +898,7 @@ function SettingsPanel() {
             />
           </label>
           <label className="text-xs font-medium">
-            Accounting record language
+            {t('settings.recordLanguage')}
             <select
               value={settings.recordLanguage}
               onChange={(event) =>
@@ -893,20 +906,21 @@ function SettingsPanel() {
               }
               className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"
             >
-              <option>Khmer</option>
-              <option>Khmer + English</option>
+              {Object.keys(recordLanguageLabels.en).map((value) => (
+                <option key={value} value={value}>{translateEnum(recordLanguageLabels, lang, value)}</option>
+              ))}
             </select>
           </label>
           <label className="text-xs font-medium">
-            Standard VAT rate (%)
+            {t('settings.vatRate')}
             <Input value="10" disabled className="mt-2" />
           </label>
           <label className="text-xs font-medium">
-            Fiscal year
-            <Input value="January–December" disabled className="mt-2" />
+            {t('settings.fiscalYear')}
+            <Input value={t('settings.fiscalYearValue')} disabled className="mt-2" />
           </label>
           <label className="text-xs font-medium">
-            Record retention (years)
+            {t('settings.retention')}
             <Input
               type="number"
               min="10"
@@ -921,12 +935,9 @@ function SettingsPanel() {
             />
           </label>
           <div className="rounded-xl border bg-muted/30 p-3 text-xs leading-5 sm:col-span-2 lg:col-span-3">
-            <p className="font-semibold">Required controls</p>
+            <p className="font-semibold">{t('settings.requiredControls')}</p>
             <p className="mt-1 text-muted-foreground">
-              Every entry requires a valid voucher. Statutory reporting remains
-              in Khmer and KHR, foreign-currency entries require a KHR
-              equivalent, records are retained for at least 10 years, and tax
-              calculations require finance review before filing.
+              {t('settings.requiredControlsDesc')}
             </p>
             <div className="mt-2 flex flex-wrap gap-3">
               <a
@@ -935,7 +946,7 @@ function SettingsPanel() {
                 target="_blank"
                 rel="noreferrer"
               >
-                ACAR guidance
+                {t('settings.acarGuidance')}
               </a>
               <a
                 className="font-medium text-primary hover:underline"
@@ -943,7 +954,7 @@ function SettingsPanel() {
                 target="_blank"
                 rel="noreferrer"
               >
-                GDT Cambodia
+                {t('settings.gdtCambodia')}
               </a>
             </div>
           </div>
@@ -952,26 +963,26 @@ function SettingsPanel() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Budget alerts</CardTitle>
+            <CardTitle>{t('settings.budgetAlerts')}</CardTitle>
             <CardDescription>
-              Notify responsible managers at these utilization levels.
+              {t('settings.budgetAlertsDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="Warning threshold (%)" value="80" />
-            <Field label="Critical threshold (%)" value="95" />
+            <Field label={t('settings.warningThreshold')} value="80" />
+            <Field label={t('settings.criticalThreshold')} value="95" />
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Approval reminder</CardTitle>
+            <CardTitle>{t('settings.approvalReminder')}</CardTitle>
             <CardDescription>
-              Escalate requests that remain pending beyond policy.
+              {t('settings.approvalReminderDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="First reminder (hours)" value="24" />
-            <Field label="Escalation (hours)" value="48" />
+            <Field label={t('settings.firstReminder')} value="24" />
+            <Field label={t('settings.escalation')} value="48" />
           </CardContent>
         </Card>
       </div>
@@ -979,14 +990,13 @@ function SettingsPanel() {
         <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
           <ShieldCheck className="size-8 text-emerald-600" />
           <div className="flex-1">
-            <p className="font-medium">Accounting safeguards remain enabled</p>
+            <p className="font-medium">{t('settings.safeguardsEnabled')}</p>
             <p className="text-xs text-muted-foreground">
-              Cambodia profile, period locks, audit logs, debit/credit
-              validation, and reversal-only posted entries.
+              {t('settings.safeguardsDesc')}
             </p>
           </div>
           <Button onClick={save} disabled={saving}>
-            <Save /> {saving ? 'Saving…' : 'Save reviewed settings'}
+            <Save /> {saving ? t('tx.saving') : t('settings.saveReviewed')}
           </Button>
         </CardContent>
       </Card>
@@ -1062,6 +1072,7 @@ function Row({
   value: string;
   status: string;
 }) {
+  const { lang } = useLanguage();
   return (
     <div className="flex flex-col gap-3 border-b p-4 last:border-0 sm:flex-row sm:items-center">
       <span className="grid size-10 place-items-center rounded-xl bg-sky-50 text-sky-600">
@@ -1072,7 +1083,7 @@ function Row({
         <p className="text-xs text-muted-foreground">{subtitle}</p>
       </div>
       <p className="font-mono text-sm font-semibold">{value}</p>
-      <Badge variant="outline">{status}</Badge>
+      <Badge variant="outline">{translateEnum(statusLabels, lang, status)}</Badge>
     </div>
   );
 }
