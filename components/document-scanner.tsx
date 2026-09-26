@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import { useLanguage } from '@/lib/i18n';
 
 export type ScannedTransaction = {
   type: 'Income' | 'Expense'; documentType: string; date: string; dueDate: string;
@@ -14,7 +15,10 @@ export type ScannedTransaction = {
   confidence: number; warnings: string[];
 };
 
+type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
+
 export function DocumentScanner({ mode, onClose, onApply }: { mode: 'upload' | 'camera'; onClose: () => void; onApply: (result: ScannedTransaction) => void }) {
+  const { t } = useLanguage();
   const uploadRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -25,7 +29,7 @@ export function DocumentScanner({ mode, onClose, onApply }: { mode: 'upload' | '
   const [cameraStarting, setCameraStarting] = useState(false);
   const [showCameraFallback, setShowCameraFallback] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState(mode === 'upload' ? 'Choose or drop a receipt, invoice, or payment document.' : 'Take a clear photo of a receipt, invoice, or payment document.');
+  const [status, setStatus] = useState(mode === 'upload' ? t('scan.chooseOrDrop') : t('scan.takeClearPhoto'));
   const [error, setError] = useState('');
   const [rawText, setRawText] = useState('');
   const [result, setResult] = useState<ScannedTransaction | null>(null);
@@ -43,11 +47,11 @@ export function DocumentScanner({ mode, onClose, onApply }: { mode: 'upload' | '
     const isImage = selected.type.startsWith('image/') || /\.(?:png|jpe?g)$/.test(lowerName);
     const isPdf = selected.type === 'application/pdf' || lowerName.endsWith('.pdf');
     const supported = isImage || (mode === 'upload' && isPdf);
-    if (!supported) { setError(mode === 'upload' ? 'Unsupported file. Upload a PNG, JPG, or PDF.' : 'Unsupported camera image. Please take another photo.'); return; }
-    if (selected.size > 20 * 1024 * 1024) { setError(mode === 'upload' ? 'File is larger than 20 MB. Choose a smaller document.' : 'Photo is larger than 20 MB. Please reduce the camera resolution and try again.'); return; }
+    if (!supported) { setError(mode === 'upload' ? t('scan.unsupportedFile') : t('scan.unsupportedCameraImage')); return; }
+    if (selected.size > 20 * 1024 * 1024) { setError(mode === 'upload' ? t('scan.fileTooLarge') : t('scan.photoTooLarge')); return; }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setFile(selected); setPreviewUrl(isImage ? URL.createObjectURL(selected) : '');
-    setStatus(`${mode === 'camera' ? 'Camera photo' : selected.name} is ready to scan.`);
+    setStatus(t('scan.readyToScan', { name: mode === 'camera' ? t('scan.cameraPhoto') : selected.name }));
   };
 
   const openPhoneCamera = () => {
@@ -64,29 +68,29 @@ export function DocumentScanner({ mode, onClose, onApply }: { mode: 'upload' | '
     setError(''); setShowCameraFallback(false); setCameraStarting(true);
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraStarting(false); setShowCameraFallback(true);
-      setError('Live camera is not available in this browser. Tap “Open phone camera” below.');
+      setError(t('scan.noLiveCamera'));
       return;
     }
     try {
       stopCamera();
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
-      streamRef.current = stream; setCameraActive(true); setStatus('Camera ready. Keep the full document inside the frame.');
+      streamRef.current = stream; setCameraActive(true); setStatus(t('scan.cameraReady'));
     } catch {
       setShowCameraFallback(true);
-      setError('Camera access was blocked or unavailable. Allow camera permission, or tap “Open phone camera” below.');
+      setError(t('scan.cameraBlocked'));
     } finally { setCameraStarting(false); }
   };
 
   const capturePhoto = async () => {
     const video = videoRef.current;
-    if (!video || !video.videoWidth || !video.videoHeight) { setError('The camera is still starting. Wait a moment and try again.'); return; }
+    if (!video || !video.videoWidth || !video.videoHeight) { setError(t('scan.cameraStillStarting')); return; }
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth; canvas.height = video.videoHeight;
     const context = canvas.getContext('2d');
-    if (!context) { setError('The camera image could not be captured.'); return; }
+    if (!context) { setError(t('scan.imageCaptureFailed')); return; }
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.94));
-    if (!blob) { setError('The camera image could not be captured.'); return; }
+    if (!blob) { setError(t('scan.imageCaptureFailed')); return; }
     stopCamera(); chooseFile(new File([blob], `camera-${Date.now()}.jpg`, { type: 'image/jpeg' }));
   };
 
@@ -96,19 +100,19 @@ export function DocumentScanner({ mode, onClose, onApply }: { mode: 'upload' | '
     stopCamera();
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setFile(null); setPreviewUrl(''); setResult(null); setRawText(''); setProgress(0); setError('');
-    setStatus(mode === 'upload' ? 'Choose or drop a receipt, invoice, or payment document.' : 'Take a clear photo of a receipt, invoice, or payment document.');
+    setStatus(mode === 'upload' ? t('scan.chooseOrDrop') : t('scan.takeClearPhoto'));
     if (mode === 'camera') void startCamera();
     else if (uploadRef.current) uploadRef.current.value = '';
   };
 
   const scan = async () => {
-    if (!file) { setError('Take a photo before scanning.'); return; }
-    setError(''); setResult(null); setProgress(4); setStatus('Preparing and enhancing document…');
+    if (!file) { setError(t('scan.takePhotoBeforeScan')); return; }
+    setError(''); setResult(null); setProgress(4); setStatus(t('scan.preparingDocument'));
     try {
       let text = '';
       const imageSources: HTMLCanvasElement[] = [];
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        setStatus('Reading PDF pages…'); setProgress(10);
+        setStatus(t('scan.readingPdf')); setProgress(10);
         const pdfjs = await import('pdfjs-dist');
         pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
         const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
@@ -126,7 +130,7 @@ export function DocumentScanner({ mode, onClose, onApply }: { mode: 'upload' | '
             const canvas = document.createElement('canvas');
             canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
             const context = canvas.getContext('2d');
-            if (!context) throw new Error('Unable to prepare the PDF page.');
+            if (!context) throw new Error(t('scan.unableToPrepPdfPage'));
             await page.render({ canvas, canvasContext: context, viewport }).promise;
             imageSources.push(enhanceCanvas(canvas));
           }
@@ -136,12 +140,12 @@ export function DocumentScanner({ mode, onClose, onApply }: { mode: 'upload' | '
       }
 
       if (imageSources.length) {
-        setStatus('Recognizing labels and values…'); setProgress(18);
+        setStatus(t('scan.recognizingLabels')); setProgress(18);
         const { createWorker } = await import('tesseract.js');
         const worker = await createWorker('eng', 1, { logger: (message) => {
           if (message.status === 'recognizing text') {
             setProgress(20 + Math.round((message.progress || 0) * 70));
-            setStatus(`Reading document… ${Math.round((message.progress || 0) * 100)}%`);
+            setStatus(t('scan.readingDocumentPercent', { percent: Math.round((message.progress || 0) * 100) }));
           }
         } });
         try {
@@ -152,57 +156,57 @@ export function DocumentScanner({ mode, onClose, onApply }: { mode: 'upload' | '
         } finally { await worker.terminate(); }
       }
 
-      if (!text.trim()) throw new Error('No readable text was detected. Try a clearer, straight image with good lighting.');
-      const parsed = parseDocument(text);
+      if (!text.trim()) throw new Error(t('scan.noTextDetected'));
+      const parsed = parseDocument(text, t);
       setRawText(text.trim()); setResult(parsed); setProgress(100);
-      setStatus('Scan complete. Review highlighted values before recording.');
+      setStatus(t('scan.complete'));
     } catch (scanError) {
-      setProgress(0); setStatus('Scan could not be completed.');
-      setError(scanError instanceof Error ? scanError.message : 'The document could not be scanned.');
+      setProgress(0); setStatus(t('scan.couldNotComplete'));
+      setError(scanError instanceof Error ? scanError.message : t('scan.couldNotScan'));
     }
   };
 
   return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-0 backdrop-blur-sm sm:p-4">
     <button type="button" aria-label="Close document scanner" className="absolute inset-0" onClick={closeScanner} />
     <section aria-label="OCR import transaction document" className="relative z-10 h-[100dvh] w-full max-w-4xl overflow-y-auto border bg-card shadow-2xl sm:h-auto sm:max-h-[92vh] sm:rounded-2xl">
-      <header className="sticky top-0 z-10 flex items-start justify-between border-b bg-card p-4 sm:p-5"><div className="flex gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><ScanLine className="size-5" /></span><div><h2 className="text-lg font-semibold sm:text-xl">{mode === 'upload' ? 'Scan document' : 'Intelligent OCR camera scan'}</h2><p className="mt-1 text-xs text-muted-foreground">{mode === 'upload' ? 'Drop or upload a PNG, JPG, or PDF · maximum 20 MB' : 'Use the live rear camera to capture your document'}</p></div></div><Button type="button" variant="ghost" size="icon" aria-label="Close scanner" onClick={closeScanner}><X /></Button></header>
+      <header className="sticky top-0 z-10 flex items-start justify-between border-b bg-card p-4 sm:p-5"><div className="flex gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><ScanLine className="size-5" /></span><div><h2 className="text-lg font-semibold sm:text-xl">{mode === 'upload' ? t('scan.titleUpload') : t('scan.titleCamera')}</h2><p className="mt-1 text-xs text-muted-foreground">{mode === 'upload' ? t('scan.subtitleUpload') : t('scan.subtitleCamera')}</p></div></div><Button type="button" variant="ghost" size="icon" aria-label="Close scanner" onClick={closeScanner}><X /></Button></header>
       <div className="space-y-4 p-4 sm:space-y-5 sm:p-5">
         {mode === 'upload' ? <>
           <input ref={uploadRef} type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg,.pdf,application/pdf" className="sr-only" onChange={(event) => chooseFile(event.target.files?.[0])} />
-          <Button type="button" className="h-12 w-full text-base" onClick={() => uploadRef.current?.click()}><Upload /> Upload file</Button>
+          <Button type="button" className="h-12 w-full text-base" onClick={() => uploadRef.current?.click()}><Upload /> {t('scan.uploadFile')}</Button>
           <button type="button" onClick={() => uploadRef.current?.click()} onDrop={(event) => { event.preventDefault(); chooseFile(event.dataTransfer.files?.[0]); }} onDragOver={(event) => event.preventDefault()} className="grid min-h-44 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center transition hover:border-primary/50 hover:bg-primary/[0.03]">
-            {previewUrl ? <img src={previewUrl} alt="Uploaded document preview" className="max-h-64 rounded-lg object-contain" /> : file ? <div><FileText className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">{file.name}</p><p className="mt-1 text-xs text-muted-foreground">PDF ready to scan</p></div> : <div><Upload className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">Drop a document here or tap to upload</p><p className="mt-1 text-xs text-muted-foreground">PNG, JPG, or PDF · maximum 20 MB</p></div>}
+            {previewUrl ? <img src={previewUrl} alt="Uploaded document preview" className="max-h-64 rounded-lg object-contain" /> : file ? <div><FileText className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">{file.name}</p><p className="mt-1 text-xs text-muted-foreground">{t('scan.pdfReadyToScan')}</p></div> : <div><Upload className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">{t('scan.dropHere')}</p><p className="mt-1 text-xs text-muted-foreground">{t('scan.pngJpgPdfMax')}</p></div>}
           </button>
         </> : <>
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={(event) => chooseFile(event.target.files?.[0])} />
-          <Button type="button" className="h-12 w-full text-base" onClick={cameraActive ? capturePhoto : startCamera} disabled={cameraStarting}><Camera /> {cameraStarting ? 'Starting camera…' : cameraActive ? 'Capture document' : file ? 'Take another photo' : 'Start camera'}</Button>
-          <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800"><strong>Camera tip:</strong> Place the full document inside the frame, keep the phone steady, and avoid shadows or glare.</div>
-          {cameraActive ? <div className="overflow-hidden rounded-2xl border-2 border-primary/40 bg-slate-950"><video ref={videoRef} autoPlay muted playsInline aria-label="Live document camera preview" className="max-h-[52vh] w-full object-contain" /><div className="flex items-center justify-center border-t border-white/15 p-3"><Button type="button" size="lg" onClick={capturePhoto}><Camera /> Capture document</Button></div></div> : previewUrl ? <div className="grid min-h-40 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center"><img src={previewUrl} alt="Camera document preview" className="max-h-64 rounded-lg object-contain" /></div> : <button type="button" onClick={startCamera} disabled={cameraStarting} className="grid min-h-40 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center transition hover:border-primary/50 hover:bg-primary/[0.03]"><div><Camera className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">Tap here to start the camera</p><p className="mt-1 text-xs text-muted-foreground">Then capture the full invoice, receipt, or payment document</p></div></button>}
-          {showCameraFallback ? <Button type="button" variant="outline" className="h-11 w-full" onClick={openPhoneCamera}><Camera /> Open phone camera</Button> : null}
+          <Button type="button" className="h-12 w-full text-base" onClick={cameraActive ? capturePhoto : startCamera} disabled={cameraStarting}><Camera /> {cameraStarting ? t('scan.startingCamera') : cameraActive ? t('scan.captureDocument') : file ? t('scan.takeAnotherPhoto') : t('scan.startCamera')}</Button>
+          <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800"><strong>{t('scan.cameraTipLabel')}</strong> {t('scan.cameraTipText')}</div>
+          {cameraActive ? <div className="overflow-hidden rounded-2xl border-2 border-primary/40 bg-slate-950"><video ref={videoRef} autoPlay muted playsInline aria-label="Live document camera preview" className="max-h-[52vh] w-full object-contain" /><div className="flex items-center justify-center border-t border-white/15 p-3"><Button type="button" size="lg" onClick={capturePhoto}><Camera /> {t('scan.captureDocument')}</Button></div></div> : previewUrl ? <div className="grid min-h-40 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center"><img src={previewUrl} alt="Camera document preview" className="max-h-64 rounded-lg object-contain" /></div> : <button type="button" onClick={startCamera} disabled={cameraStarting} className="grid min-h-40 w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed bg-muted/25 p-5 text-center transition hover:border-primary/50 hover:bg-primary/[0.03]"><div><Camera className="mx-auto size-10 text-primary" /><p className="mt-3 text-sm font-medium">{t('scan.tapToStartCamera')}</p><p className="mt-1 text-xs text-muted-foreground">{t('scan.thenCapture')}</p></div></button>}
+          {showCameraFallback ? <Button type="button" variant="outline" className="h-11 w-full" onClick={openPhoneCamera}><Camera /> {t('scan.openPhoneCamera')}</Button> : null}
         </>}
-        {file ? <div className="flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center"><span className="grid size-9 place-items-center rounded-lg bg-muted text-primary">{file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') ? <FileText className="size-4" /> : <FileImage className="size-4" />}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{mode === 'camera' ? 'Camera photo ready' : file.name}</p><p className="text-xs text-muted-foreground">{file.type || 'Document'} · {(file.size / 1024).toFixed(0)} KB</p></div><Button type="button" onClick={scan} disabled={progress > 0 && progress < 100}>{progress > 0 && progress < 100 ? <Loader2 className="animate-spin" /> : <ScanLine />} {progress > 0 && progress < 100 ? 'Scanning…' : 'Scan document'}</Button></div> : null}
-        {progress > 0 ? <div><div className="mb-2 flex justify-between text-xs"><span>{status}</span><span>{progress}%</span></div><Progress value={progress} /></div> : <p className="text-xs text-muted-foreground">Image cleanup and OCR happen in your browser. No accounting record is created until you review and save it.</p>}
+        {file ? <div className="flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center"><span className="grid size-9 place-items-center rounded-lg bg-muted text-primary">{file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') ? <FileText className="size-4" /> : <FileImage className="size-4" />}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{mode === 'camera' ? t('scan.cameraPhotoReady') : file.name}</p><p className="text-xs text-muted-foreground">{file.type || t('scan.documentWord')} · {(file.size / 1024).toFixed(0)} KB</p></div><Button type="button" onClick={scan} disabled={progress > 0 && progress < 100}>{progress > 0 && progress < 100 ? <Loader2 className="animate-spin" /> : <ScanLine />} {progress > 0 && progress < 100 ? t('scan.scanning') : t('tx.scanDocument')}</Button></div> : null}
+        {progress > 0 ? <div><div className="mb-2 flex justify-between text-xs"><span>{status}</span><span>{progress}%</span></div><Progress value={progress} /></div> : <p className="text-xs text-muted-foreground">{t('scan.browserOcrNotice')}</p>}
         {error ? <div role="alert" className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><AlertCircle className="mt-0.5 size-4 shrink-0" />{error}</div> : null}
         {result ? <div className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50/45 p-4">
-          <div className="flex flex-wrap items-center gap-2"><CheckCircle2 className="size-5 text-emerald-600" /><div><p className="text-sm font-semibold">Detected transaction details</p><p className="text-xs text-muted-foreground">All values remain editable and require finance review.</p></div><Badge variant="outline" className="ml-auto bg-card">{result.documentType}</Badge><Badge className={result.confidence >= 80 ? 'bg-emerald-600' : result.confidence >= 55 ? 'bg-amber-600' : 'bg-red-600'}>{result.confidence}% confidence</Badge></div>
-          {result.warnings.length ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-xs font-semibold text-amber-800">Review needed</p><ul className="mt-1 list-disc pl-4 text-xs text-amber-800">{result.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
+          <div className="flex flex-wrap items-center gap-2"><CheckCircle2 className="size-5 text-emerald-600" /><div><p className="text-sm font-semibold">{t('scan.detectedDetails')}</p><p className="text-xs text-muted-foreground">{t('scan.editableNotice')}</p></div><Badge variant="outline" className="ml-auto bg-card">{result.documentType}</Badge><Badge className={result.confidence >= 80 ? 'bg-emerald-600' : result.confidence >= 55 ? 'bg-amber-600' : 'bg-red-600'}>{t('scan.confidencePercent', { percent: result.confidence })}</Badge></div>
+          {result.warnings.length ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-xs font-semibold text-amber-800">{t('scan.reviewNeeded')}</p><ul className="mt-1 list-disc pl-4 text-xs text-amber-800">{result.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <ScanField label="Customer / Vendor" value={result.party} onChange={(value) => setResult({ ...result, party: value })} />
-            <ScanField label="Invoice / Receipt no." value={result.reference} onChange={(value) => setResult({ ...result, reference: value })} />
-            <ScanField label="Purchase order" value={result.purchaseOrder} onChange={(value) => setResult({ ...result, purchaseOrder: value })} />
-            <ScanField label="Issue date" value={result.date} onChange={(value) => setResult({ ...result, date: value })} />
-            <ScanField label="Due date" value={result.dueDate} onChange={(value) => setResult({ ...result, dueDate: value })} />
-            <ScanField label="Currency" value={result.currency} onChange={(value) => setResult({ ...result, currency: value.toUpperCase() })} />
-            <ScanField label="Subtotal" value={result.subtotal} onChange={(value) => setResult({ ...result, subtotal: value })} />
-            <ScanField label="Tax / VAT" value={result.tax} onChange={(value) => setResult({ ...result, tax: value })} />
-            <ScanField label="Total amount" value={result.amount} onChange={(value) => setResult({ ...result, amount: value })} />
-            <ScanField label="Category" value={result.category} onChange={(value) => setResult({ ...result, category: value })} />
-            <ScanField label="Payment method" value={result.paymentMethod} onChange={(value) => setResult({ ...result, paymentMethod: value })} />
-            <label className="text-xs font-medium">Transaction type<select value={result.type} onChange={(event) => setResult({ ...result, type: event.target.value as 'Income' | 'Expense' })} className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"><option>Expense</option><option>Income</option></select></label>
-            <label className="text-xs font-medium sm:col-span-2 lg:col-span-3">Description<textarea value={result.description} onChange={(event) => setResult({ ...result, description: event.target.value })} rows={2} className="mt-2 w-full rounded-lg border bg-card px-3 py-2 text-sm" /></label>
+            <ScanField label={t('field.customerVendor')} value={result.party} onChange={(value) => setResult({ ...result, party: value })} />
+            <ScanField label={t('field.invoiceReceiptNo')} value={result.reference} onChange={(value) => setResult({ ...result, reference: value })} />
+            <ScanField label={t('field.purchaseOrder')} value={result.purchaseOrder} onChange={(value) => setResult({ ...result, purchaseOrder: value })} />
+            <ScanField label={t('field.issueDate')} value={result.date} onChange={(value) => setResult({ ...result, date: value })} />
+            <ScanField label={t('field.dueDate')} value={result.dueDate} onChange={(value) => setResult({ ...result, dueDate: value })} />
+            <ScanField label={t('field.currency')} value={result.currency} onChange={(value) => setResult({ ...result, currency: value.toUpperCase() })} />
+            <ScanField label={t('field.subtotal')} value={result.subtotal} onChange={(value) => setResult({ ...result, subtotal: value })} />
+            <ScanField label={t('field.taxVat')} value={result.tax} onChange={(value) => setResult({ ...result, tax: value })} />
+            <ScanField label={t('tx.totalAmount')} value={result.amount} onChange={(value) => setResult({ ...result, amount: value })} />
+            <ScanField label={t('table.category')} value={result.category} onChange={(value) => setResult({ ...result, category: value })} />
+            <ScanField label={t('field.paymentMethod')} value={result.paymentMethod} onChange={(value) => setResult({ ...result, paymentMethod: value })} />
+            <label className="text-xs font-medium">{t('field.transactionType')}<select value={result.type} onChange={(event) => setResult({ ...result, type: event.target.value as 'Income' | 'Expense' })} className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"><option>Expense</option><option>Income</option></select></label>
+            <label className="text-xs font-medium sm:col-span-2 lg:col-span-3">{t('field.description')}<textarea value={result.description} onChange={(event) => setResult({ ...result, description: event.target.value })} rows={2} className="mt-2 w-full rounded-lg border bg-card px-3 py-2 text-sm" /></label>
           </div>
-          <details className="rounded-xl border bg-card p-3"><summary className="cursor-pointer text-xs font-medium">View recognized text</summary><pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap text-[11px] text-muted-foreground">{rawText}</pre></details>
-          <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={resetScanner}>{mode === 'upload' ? 'Scan another file' : 'Take another photo'}</Button><Button type="button" onClick={() => onApply(result)}>Review and record</Button></div>
+          <details className="rounded-xl border bg-card p-3"><summary className="cursor-pointer text-xs font-medium">{t('scan.viewRecognizedText')}</summary><pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap text-[11px] text-muted-foreground">{rawText}</pre></details>
+          <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={resetScanner}>{mode === 'upload' ? t('scan.scanAnotherFile') : t('scan.takeAnotherPhoto')}</Button><Button type="button" onClick={() => onApply(result)}>{t('scan.reviewAndRecord')}</Button></div>
         </div> : null}
       </div>
     </section>
@@ -237,7 +241,7 @@ function enhanceCanvas(source: HTMLCanvasElement) {
   context.putImageData(pixels, 0, 0); return source;
 }
 
-function parseDocument(text: string): ScannedTransaction {
+function parseDocument(text: string, t: TranslateFn): ScannedTransaction {
   const cleaned = text.replace(/\r/g, '\n').replace(/[ \t]+/g, ' ');
   const lines = cleaned.split('\n').map((line) => line.trim()).filter(Boolean); const lower = cleaned.toLowerCase();
   const documentType = /purchase\s*order|\bpo\b/i.test(cleaned) ? 'Purchase order' : /receipt|amount received|paid/i.test(cleaned) ? 'Receipt' : /invoice|tax invoice|bill/i.test(cleaned) ? 'Invoice' : /payment|transfer|remittance/i.test(cleaned) ? 'Payment evidence' : 'Financial document';
@@ -257,13 +261,13 @@ function parseDocument(text: string): ScannedTransaction {
   const type: 'Income' | 'Expense' = /amount received|payment received|bill to|invoice to|customer/i.test(cleaned) && !/bill from|vendor|supplier/i.test(cleaned) ? 'Income' : 'Expense';
   const category = categorize(`${description} ${party} ${cleaned.slice(0, 800)}`, type);
   const warnings: string[] = [];
-  if (!party) warnings.push('Customer or vendor was not confidently detected.');
-  if (!reference) warnings.push('Invoice or receipt number is missing.');
-  if (!date) warnings.push('Issue date is missing.');
-  if (!description) warnings.push('Description is missing.');
-  if (!amount) warnings.push('Total amount is missing.');
-  if (subtotal && tax && amount && Math.abs(Number(subtotal) + Number(tax) - Number(amount)) > 0.02) warnings.push('Subtotal plus tax does not match the detected total.');
-  if (type === 'Expense' && !/vendor|supplier|bill from|receipt|purchase/i.test(lower)) warnings.push('Transaction type defaulted to Expense; confirm before saving.');
+  if (!party) warnings.push(t('scan.warnPartyNotDetected'));
+  if (!reference) warnings.push(t('scan.warnReferenceMissing'));
+  if (!date) warnings.push(t('scan.warnDateMissing'));
+  if (!description) warnings.push(t('scan.warnDescriptionMissing'));
+  if (!amount) warnings.push(t('scan.warnAmountMissing'));
+  if (subtotal && tax && amount && Math.abs(Number(subtotal) + Number(tax) - Number(amount)) > 0.02) warnings.push(t('scan.warnSubtotalTaxMismatch'));
+  if (type === 'Expense' && !/vendor|supplier|bill from|receipt|purchase/i.test(lower)) warnings.push(t('scan.warnDefaultedExpense'));
   const score = [party, reference, date, amount, currency, description].filter(Boolean).length;
   const confidence = Math.min(96, 34 + score * 10 + (total ? 8 : 0) + (documentType !== 'Financial document' ? 6 : 0));
   return { type, documentType, date, dueDate, reference: cleanValue(reference), party: cleanValue(party), description: cleanValue(description), category, currency, subtotal, tax, amount, paymentMethod, purchaseOrder: cleanValue(purchaseOrder), confidence, warnings };

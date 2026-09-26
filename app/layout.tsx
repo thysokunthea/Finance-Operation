@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import { ClerkProvider } from '@clerk/nextjs';
+import { ClerkLocaleProvider } from '@/components/clerk-locale-provider';
 import { LanguageProvider } from '@/lib/i18n';
 import './globals.css';
 
@@ -34,5 +34,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}><ClerkProvider><LanguageProvider>{children}</LanguageProvider></ClerkProvider></body></html>;
+  return <html lang="en"><body className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}><LanguageProvider><ClerkLocaleProvider>{children}</ClerkLocaleProvider></LanguageProvider></body></html>;
 }
