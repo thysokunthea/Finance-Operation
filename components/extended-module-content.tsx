@@ -639,17 +639,16 @@ function answerFromData(question: string, rows: AssistantTransaction[], budgets:
   return t('asst.monthlySummary', { revenue: assistantMoney(revenue), expenses: assistantMoney(expenses), net: assistantMoney(revenue - expenses) });
 }
 
+type ChatEntry = { role: 'user' | 'assistant'; content: string; source?: 'ai' | 'rules' };
+
 function Assistant() {
   const { t } = useLanguage();
-  const [question, setQuestion] = useState(
-    'Which customers have overdue invoices?',
-  );
-  const [answer, setAnswer] = useState('');
+  const [question, setQuestion] = useState('');
+  const [chat, setChat] = useState<ChatEntry[]>([]);
   const [rows, setRows] = useState<AssistantTransaction[]>([]);
   const [budgets, setBudgets] = useState<BudgetLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [asking, setAsking] = useState(false);
-  const [source, setSource] = useState<'ai' | 'rules' | ''>('');
 
   useEffect(() => {
     Promise.all([
@@ -664,34 +663,45 @@ function Assistant() {
   }, []);
 
   const ask = async () => {
+    const trimmed = question.trim();
+    if (!trimmed || asking) return;
+    const nextChat: ChatEntry[] = [...chat, { role: 'user', content: trimmed }];
+    setChat(nextChat);
+    setQuestion('');
     setAsking(true);
     try {
       const response = await fetch('/api/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ messages: nextChat.map((entry) => ({ role: entry.role, content: entry.content })) }),
       });
       const payload = (await response.json()) as { answer?: string; error?: string };
       if (response.ok && payload.answer) {
-        setAnswer(payload.answer);
-        setSource('ai');
+        setChat((current) => [...current, { role: 'assistant', content: payload.answer!, source: 'ai' }]);
       } else {
-        setAnswer(answerFromData(question, rows, budgets, t));
-        setSource('rules');
+        setChat((current) => [...current, { role: 'assistant', content: answerFromData(trimmed, rows, budgets, t), source: 'rules' }]);
       }
     } catch {
-      setAnswer(answerFromData(question, rows, budgets, t));
-      setSource('rules');
+      setChat((current) => [...current, { role: 'assistant', content: answerFromData(trimmed, rows, budgets, t), source: 'rules' }]);
     } finally {
       setAsking(false);
     }
   };
+
+  const onInputKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void ask();
+    }
+  };
+
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <Header
         crumb={`${t('tx.breadcrumbFinance')} / ${t('nav.assistant')}`}
         title={t('asst.title')}
         copy={t('asst.copy')}
+        action={chat.length > 0 ? <Button variant="ghost" size="sm" onClick={() => setChat([])}>{t('asst.clearChat')}</Button> : undefined}
       />
       <Card>
         <CardHeader>
@@ -708,28 +718,46 @@ function Assistant() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-xl bg-muted/50 p-4 text-sm">
-            {t('asst.tryPrompt')}
-          </div>
-          {answer ? (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm leading-6">
-              <div className="mb-2 flex items-center gap-2 font-semibold text-primary">
-                <Sparkles className="size-4" /> {source === 'ai' ? t('asst.aiAnswer') : t('asst.rulesAnswer')}
-              </div>
-              {answer}
+          {chat.length === 0 ? (
+            <div className="rounded-xl bg-muted/50 p-4 text-sm">
+              {t('asst.tryPrompt')}
             </div>
-          ) : null}
+          ) : (
+            <div className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
+              {chat.map((entry, index) => entry.role === 'user' ? (
+                <div key={index} className="flex justify-end">
+                  <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground">
+                    {entry.content}
+                  </div>
+                </div>
+              ) : (
+                <div key={index} className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm leading-6">
+                  <div className="mb-2 flex items-center gap-2 font-semibold text-primary">
+                    <Sparkles className="size-4" /> {entry.source === 'ai' ? t('asst.aiAnswer') : t('asst.rulesAnswer')}
+                  </div>
+                  <div className="whitespace-pre-wrap">{entry.content}</div>
+                </div>
+              ))}
+              {asking ? (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
+                  {t('asst.thinking')}
+                </div>
+              ) : null}
+            </div>
+          )}
           <div className="flex gap-2">
             <Textarea
               aria-label="Ask the finance assistant"
+              placeholder={t('asst.inputPlaceholder')}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={onInputKeyDown}
               className="min-h-12 resize-none"
             />
             <Button
               aria-label="Send question"
-              onClick={ask}
-              disabled={loading || asking}
+              onClick={() => void ask()}
+              disabled={loading || asking || !question.trim()}
               className="self-end"
             >
               <Send />
