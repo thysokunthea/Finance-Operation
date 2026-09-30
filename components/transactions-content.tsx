@@ -14,6 +14,7 @@ import {
   ScanLine,
   Search,
   ShieldCheck,
+  Trash2,
   X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   DocumentScanner,
   type ScannedTransaction,
@@ -127,6 +138,8 @@ export function TransactionsContent({
   const [draft, setDraft] = useState<TransactionDraft>(() => blankDraft(type));
   const [selected, setSelected] = useState<TransactionRow | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TransactionRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const showNotice = (message: string, isError: boolean) => {
     setNotice(message);
@@ -247,6 +260,25 @@ export function TransactionsContent({
     });
     setNotice('');
     setDialogOpen(true);
+  };
+
+  const deleteTransaction = async () => {
+    if (!deleteTarget || deleting) return;
+    const target = deleteTarget;
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/transactions/${encodeURIComponent(target.id)}`, { method: 'DELETE' });
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || t('tx.deleteFailed'));
+      setRecords((current) => current.filter((row) => row.id !== target.id));
+      setSelected((current) => (current?.id === target.id ? null : current));
+      setDeleteTarget(null);
+      showNotice(t('tx.deletedNotice', { id: target.id }), false);
+    } catch (deleteError) {
+      showNotice(deleteError instanceof Error ? deleteError.message : t('tx.deleteFailed'), true);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const saveTransaction = async (event: React.FormEvent) => {
@@ -804,6 +836,13 @@ export function TransactionsContent({
                 <Button onClick={() => openEditTransaction(selected)}>
                   <Pencil /> {t('tx.editTransaction')}
                 </Button>
+                <Button
+                  variant="outline"
+                  className="col-span-2 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  onClick={() => setDeleteTarget(selected)}
+                >
+                  <Trash2 /> {t('tx.deleteTransaction')}
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -1099,6 +1138,25 @@ export function TransactionsContent({
           </form>
         </div>
       ) : null}
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{deleteTarget ? t('tx.deleteConfirmTitle', { id: deleteTarget.id }) : t('tx.deleteTransaction')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('tx.deleteConfirmDesc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>{t('tx.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-700"
+              disabled={deleting}
+              onClick={() => void deleteTransaction()}
+            >
+              {deleting ? t('tx.deleting') : t('tx.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

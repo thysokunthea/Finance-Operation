@@ -163,6 +163,25 @@ export async function saveTransactionRecord(
   return saved;
 }
 
+export async function deleteTransactionRecord(id: string, user: ChatGPTUser): Promise<void> {
+  const existing = (await query<Record<string, unknown>>(
+    `SELECT * FROM transactions WHERE id = $1 AND organization_id = $2 AND posting_status != 'deleted'`,
+    [id, organizationId],
+  ))[0];
+  if (!existing) throw new Error('Transaction not found.');
+
+  const userId = `user-${stableKey(user.userId)}`;
+  await executeBatch([
+    { text: `INSERT INTO organizations (id, name, code, functional_currency, timezone, fiscal_year_start_month)
+      VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT(id) DO NOTHING`, parameters: [organizationId, 'LedgerFlow Organization', 'LEDGERFLOW', 'KHR', 'Asia/Phnom_Penh', 1] },
+    { text: `INSERT INTO users (id, organization_id, external_user_id, email, display_name, status)
+      VALUES ($1, $2, $3, $4, $5, 'active') ON CONFLICT(id) DO UPDATE SET email = excluded.email, display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP`, parameters: [userId, organizationId, user.userId, user.email, user.displayName] },
+    { text: `UPDATE transactions SET posting_status = 'deleted', updated_at = CURRENT_TIMESTAMP, version = version + 1 WHERE id = $1 AND organization_id = $2`, parameters: [id, organizationId] },
+    { text: `INSERT INTO audit_logs (id, organization_id, actor_user_id, action, resource_type, resource_id, previous_json, new_json, reason, correlation_id)
+      VALUES ($1, $2, $3, 'delete', 'transaction', $4, $5, NULL, $6, $7)`, parameters: [crypto.randomUUID(), organizationId, userId, id, JSON.stringify(existing), 'Transaction deleted by user.', crypto.randomUUID()] },
+  ]);
+}
+
 function toMinor(value: string) {
   const parsed = Number(value.replace(/[^0-9.-]/g, ''));
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
