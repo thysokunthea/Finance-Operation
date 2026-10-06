@@ -63,6 +63,7 @@ export async function POST(request: Request) {
       id: t.id, date: t.date, type: t.type, party: t.party, department: t.department,
       category: t.category, amount: t.amount, currency: t.currency, status: t.status,
       approval: t.approval, dueDate: t.dueDate, taxTreatment: t.taxTreatment,
+      journalType: t.journalType, accountCode: t.accountCode, accountName: t.accountName,
     })),
     budgets,
     tasks: tasks.map((item) => ({ id: item.id, name: item.name, category: item.category, related: item.related, due: item.due, priority: item.priority, status: item.status })),
@@ -76,6 +77,8 @@ export async function POST(request: Request) {
   const systemPrompt = `You are LedgerFlow's finance assistant for a Cambodia-based SME finance operations workspace. The organization uses KHR (Cambodian riel) as statutory currency and USD as a common secondary transaction currency; amounts in the data are pre-formatted currency strings.
 
 You have read-only access to the organization's live transactions, budgets, tasks, payment requests, documents, pending approvals, the current month's closing checklist, and its compliance profile — all provided as JSON below. Ground every answer strictly in this data: never invent numbers, customers, vendors, dates, or records that are not present in it. If the data does not contain what's needed to answer, say so plainly and suggest where in the app the user could find or enter it (e.g. "Add this on the Budgets page").
+
+Each transaction also carries journalType (one of: sales, purchases, cash_receipts, cash_disbursements, general — the Cambodia GDT small-taxpayer special journal it's recorded in) and accountCode/accountName (a simplified chart-of-accounts tag). This is single-entry tagging, not full double-entry — there are no separate debit/credit lines to reconcile. Use these fields when asked about journals, specific accounts, or account balances (e.g. "what's in the sales journal this month?" or "how much is in Software & Subscriptions?").
 
 Be genuinely useful, not just literal:
 - Reason across multiple data sources together when relevant (e.g. connect overdue invoices to cash flow, or a pending approval to a task).

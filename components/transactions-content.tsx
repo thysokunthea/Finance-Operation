@@ -44,7 +44,8 @@ import {
   type ScannedTransaction,
 } from '@/components/document-scanner';
 import { useLanguage } from '@/lib/i18n';
-import { departmentLabels, statusLabels, taxTreatmentLabels, translateEnum, txTypeLabels } from '@/lib/translations';
+import { accountLabels, departmentLabels, journalLabels, statusLabels, taxTreatmentLabels, translateEnum, txTypeLabels } from '@/lib/translations';
+import { chartOfAccounts, classifyJournal, getAccount, journalTypes, suggestAccount, type JournalType } from '@/lib/chart-of-accounts';
 
 type TransactionRow = {
   id: string;
@@ -68,32 +69,42 @@ type TransactionRow = {
   documentType?: string;
   taxTreatment?: string;
   exchangeRate?: string;
+  journalType?: string;
+  accountCode?: string;
+  accountName?: string;
 };
 type TransactionDraft = Omit<ScannedTransaction, 'confidence' | 'warnings'> & {
   department: string;
   taxTreatment: string;
   exchangeRate: string;
+  journalType: JournalType;
+  accountCode: string;
 };
 
-const blankDraft = (type: 'All' | 'Income' | 'Expense'): TransactionDraft => ({
-  type: type === 'All' ? 'Expense' : type,
-  documentType: 'Manual entry',
-  date: todayInputDate(),
-  dueDate: '',
-  reference: '',
-  party: '',
-  description: '',
-  department: 'Operations',
-  category: '',
-  currency: 'KHR',
-  subtotal: '',
-  tax: '',
-  amount: '',
-  paymentMethod: '',
-  purchaseOrder: '',
-  taxTreatment: 'Standard VAT 10%',
-  exchangeRate: '1',
-});
+const blankDraft = (type: 'All' | 'Income' | 'Expense'): TransactionDraft => {
+  const resolvedType = type === 'All' ? 'Expense' : type;
+  return {
+    type: resolvedType,
+    documentType: 'Manual entry',
+    date: todayInputDate(),
+    dueDate: '',
+    reference: '',
+    party: '',
+    description: '',
+    department: 'Operations',
+    category: '',
+    currency: 'KHR',
+    subtotal: '',
+    tax: '',
+    amount: '',
+    paymentMethod: '',
+    purchaseOrder: '',
+    taxTreatment: 'Standard VAT 10%',
+    exchangeRate: '1',
+    journalType: classifyJournal(resolvedType, 'Pending'),
+    accountCode: suggestAccount(resolvedType, '', '').code,
+  };
+};
 
 const initialRows: TransactionRow[] = [];
 
@@ -257,6 +268,8 @@ export function TransactionsContent({
       taxTreatment: record.taxTreatment || 'Standard VAT 10%',
       exchangeRate:
         record.exchangeRate || (record.currency === 'KHR' ? '1' : ''),
+      journalType: isJournalType(record.journalType) ? record.journalType : classifyJournal(record.type, record.status),
+      accountCode: record.accountCode || suggestAccount(record.type, record.category, record.description || '').code,
     });
     setNotice('');
     setDialogOpen(true);
@@ -331,6 +344,9 @@ export function TransactionsContent({
       documentType: draft.documentType,
       taxTreatment: draft.taxTreatment,
       exchangeRate: draft.currency === 'KHR' ? '1' : draft.exchangeRate,
+      journalType: draft.journalType,
+      accountCode: draft.accountCode,
+      accountName: getAccount(draft.accountCode)?.name || '',
     };
     setSaving(true);
     showNotice(t('tx.noticeSaving'), false);
@@ -376,16 +392,19 @@ export function TransactionsContent({
 
   const useScannedData = (scanned: ScannedTransaction) => {
     const { confidence: _confidence, warnings: _warnings, ...fields } = scanned;
+    const resolvedType = type === 'All' ? fields.type : type;
     setEditingId(null);
     setDraft({
       ...fields,
-      type: type === 'All' ? fields.type : type,
+      type: resolvedType,
       date: toInputDate(fields.date) || todayInputDate(),
       dueDate: toInputDate(fields.dueDate),
       department: suggestDepartment(fields.category, fields.description),
       taxTreatment:
         Number(fields.tax || 0) > 0 ? 'Standard VAT 10%' : 'Review required',
       exchangeRate: fields.currency === 'KHR' ? '1' : '',
+      journalType: classifyJournal(resolvedType, 'Pending'),
+      accountCode: suggestAccount(resolvedType, fields.category, fields.description).code,
     });
     setScannerMode(null);
     showNotice(t('tx.noticeScanApplied'), false);
@@ -762,6 +781,12 @@ export function TransactionsContent({
                 <Detail label={t('field.issueDate')} value={selected.date} />
                 <Detail label={t('tx.department')} value={translateEnum(departmentLabels, lang, selected.department)} />
                 <Detail label={t('table.category')} value={selected.category} />
+                {selected.journalType ? (
+                  <Detail label={t('field.journal')} value={translateEnum(journalLabels, lang, selected.journalType)} />
+                ) : null}
+                {selected.accountCode ? (
+                  <Detail label={t('field.account')} value={`${selected.accountCode} — ${translateEnum(accountLabels, lang, selected.accountCode)}`} />
+                ) : null}
                 <Detail label={t('field.responsible')} value={selected.owner} />
                 <Detail label={t('field.approval')} value={selected.approval} />
                 {selected.dueDate ? (
@@ -1017,6 +1042,28 @@ export function TransactionsContent({
                   className="mt-2"
                 />
               </Field>
+              <Field label={t('field.journal')}>
+                <select
+                  value={draft.journalType}
+                  onChange={(event) => setDraft({ ...draft, journalType: event.target.value as JournalType })}
+                  className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"
+                >
+                  {journalTypes.map((value) => (
+                    <option key={value} value={value}>{translateEnum(journalLabels, lang, value)}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={t('field.account')}>
+                <select
+                  value={draft.accountCode}
+                  onChange={(event) => setDraft({ ...draft, accountCode: event.target.value })}
+                  className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"
+                >
+                  {chartOfAccounts.map((account) => (
+                    <option key={account.code} value={account.code}>{account.code} — {translateEnum(accountLabels, lang, account.code)}</option>
+                  ))}
+                </select>
+              </Field>
               <Field label={t('field.vatTreatment')}>
                 <select
                   value={draft.taxTreatment}
@@ -1230,4 +1277,7 @@ function suggestDepartment(category: string, description: string) {
   if (/marketing|advertis|campaign|design/.test(value)) return 'Marketing';
   if (/revenue|sale|customer|service income/.test(value)) return 'Commercial';
   return 'Operations';
+}
+function isJournalType(value: string | undefined): value is JournalType {
+  return journalTypes.includes(value as JournalType);
 }

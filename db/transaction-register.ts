@@ -1,5 +1,6 @@
 import type { ChatGPTUser } from '@/app/chatgpt-auth';
 import { executeBatch, query } from '@/db/neon';
+import { classifyJournal, getAccount, suggestAccount } from '@/lib/chart-of-accounts';
 
 export type TransactionRecord = {
   id: string;
@@ -23,6 +24,9 @@ export type TransactionRecord = {
   documentType?: string;
   taxTreatment?: string;
   exchangeRate?: string;
+  journalType?: string;
+  accountCode?: string;
+  accountName?: string;
 };
 
 const organizationId = 'ledgerflow-org';
@@ -62,6 +66,9 @@ export async function listTransactionRecords(): Promise<TransactionRecord[]> {
 
   return result.map((row) => {
     const payload = parsePayload(row.payloadjson);
+    const category = payload.category || '';
+    const accountCode = payload.accountCode || suggestAccount(row.type, category, row.description || '').code;
+    const accountName = getAccount(accountCode)?.name || suggestAccount(row.type, category, row.description || '').name;
     return {
       id: row.id,
       date: formatDate(row.date),
@@ -69,7 +76,7 @@ export async function listTransactionRecords(): Promise<TransactionRecord[]> {
       reference: row.reference,
       party: row.party,
       department: row.department,
-      category: payload.category || '',
+      category,
       amount: formatMoney(Number(row.totalminor), row.currency),
       status: row.status,
       approval: row.approval,
@@ -84,6 +91,9 @@ export async function listTransactionRecords(): Promise<TransactionRecord[]> {
       documentType: payload.documentType || '',
       taxTreatment: payload.taxTreatment || 'Standard VAT 10%',
       exchangeRate: payload.exchangeRate || '',
+      journalType: payload.journalType || classifyJournal(row.type, row.status),
+      accountCode,
+      accountName,
     };
   });
 }

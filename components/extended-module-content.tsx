@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Bot,
   CheckCircle2,
@@ -24,7 +24,8 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
 import { useLanguage } from '@/lib/i18n';
-import { departmentLabels, gdtFilingLabels, recordLanguageLabels, statusLabels, taxpayerClassLabels, translateEnum, type Lang } from '@/lib/translations';
+import { accountLabels, departmentLabels, gdtFilingLabels, journalLabels, recordLanguageLabels, statusLabels, taxpayerClassLabels, translateEnum, type Lang } from '@/lib/translations';
+import { journalTypes, type JournalType } from '@/lib/chart-of-accounts';
 
 type Kind =
   | 'requests'
@@ -256,73 +257,149 @@ function Budgets() {
   );
 }
 
+type JournalTransaction = {
+  id: string;
+  date: string;
+  type: string;
+  reference: string;
+  party: string;
+  category: string;
+  amount: string;
+  journalType?: string;
+  accountCode?: string;
+};
+
 function Accounting() {
-  const { t } = useLanguage();
-  const [lines, setLines] = useState<AccountLine[]>([]);
+  const { t, lang } = useLanguage();
+  const [transactions, setTransactions] = useState<JournalTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
+  const [tab, setTab] = useState<'summary' | JournalType>('summary');
 
   useEffect(() => {
     fetch('/api/transactions', { cache: 'no-store' })
       .then(async (response) => {
-        const payload = (await response.json()) as { transactions?: { type: string; category: string; amount: string }[]; error?: string };
+        const payload = (await response.json()) as { transactions?: JournalTransaction[]; error?: string };
         if (!response.ok) throw new Error(payload.error || t('acct.loadFailed'));
-        const grouped = new Map<string, AccountLine>();
-        for (const transaction of payload.transactions || []) {
-          const key = `${transaction.type}::${transaction.category}`;
-          const existing = grouped.get(key) || { category: transaction.category, type: transaction.type, total: 0, count: 0 };
-          existing.total += Number(transaction.amount) || 0;
-          existing.count += 1;
-          grouped.set(key, existing);
-        }
-        setLines([...grouped.values()].sort((a, b) => b.total - a.total));
+        setTransactions(payload.transactions || []);
       })
       .catch((error: unknown) => setNotice(error instanceof Error ? error.message : t('acct.loadFailed')))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const lines = useMemo(() => {
+    const grouped = new Map<string, AccountLine>();
+    for (const transaction of transactions) {
+      const key = `${transaction.type}::${transaction.category}`;
+      const existing = grouped.get(key) || { category: transaction.category, type: transaction.type, total: 0, count: 0 };
+      existing.total += Number(transaction.amount) || 0;
+      existing.count += 1;
+      grouped.set(key, existing);
+    }
+    return [...grouped.values()].sort((a, b) => b.total - a.total);
+  }, [transactions]);
+
   const totalIncome = lines.filter((line) => line.type === 'Income').reduce((sum, line) => sum + line.total, 0);
   const totalExpense = lines.filter((line) => line.type === 'Expense').reduce((sum, line) => sum + line.total, 0);
+
+  const journalRows = useMemo(
+    () => (tab === 'summary' ? [] : transactions.filter((transaction) => (transaction.journalType || 'general') === tab)),
+    [transactions, tab],
+  );
+  const journalTotal = journalRows.reduce((sum, row) => sum + (Number(row.amount.replace(/[^0-9.-]/g, '')) || 0), 0);
 
   return (
     <div className="space-y-5">
       <Header
         crumb={`${t('tx.breadcrumbFinance')} / ${t('nav.accounting')}`}
-        title={t('acct.title')}
-        copy={t('acct.copy')}
+        title={t('journals.title')}
+        copy={t('journals.copy')}
       />
       {notice ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{notice}</div> : null}
-      <Metrics
-        values={[
-          [loading ? '…' : money(totalIncome, true), t('acct.totalIncome')],
-          [loading ? '…' : money(totalExpense, true), t('acct.totalExpense')],
-          [loading ? '…' : money(totalIncome - totalExpense, true), t('acct.netPosition')],
-        ]}
-      />
-      <ListCard
-        title={t('acct.accountsByCategory')}
-        description={t('acct.accountsByCategoryDesc')}
-      >
-        {lines.map((line) => (
-          <div
-            key={`${line.type}-${line.category}`}
-            className="grid gap-3 border-b p-4 last:border-0 md:grid-cols-[1fr_120px_120px_120px] md:items-center"
-          >
-            <div>
-              <p className="text-sm font-medium">{line.category}</p>
-              <p className="text-xs text-muted-foreground">{line.type}</p>
-            </div>
-            <Value label={t('acct.total')} value={money(line.total)} />
-            <Value label={t('acct.entries')} value={String(line.count)} />
-            <Badge variant="outline" className={line.type === 'Income' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-700'}>
-              {line.type}
-            </Badge>
-          </div>
+      <div className="flex flex-wrap gap-1 rounded-xl border bg-muted/30 p-1">
+        <TabButton active={tab === 'summary'} onClick={() => setTab('summary')}>{t('journals.tabSummary')}</TabButton>
+        {journalTypes.map((journalType) => (
+          <TabButton key={journalType} active={tab === journalType} onClick={() => setTab(journalType)}>
+            {translateEnum(journalLabels, lang, journalType)}
+          </TabButton>
         ))}
-        {!loading && lines.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">{t('acct.noneYet')}</div> : null}
-      </ListCard>
+      </div>
+      {tab === 'summary' ? (
+        <>
+          <Metrics
+            values={[
+              [loading ? '…' : money(totalIncome, true), t('acct.totalIncome')],
+              [loading ? '…' : money(totalExpense, true), t('acct.totalExpense')],
+              [loading ? '…' : money(totalIncome - totalExpense, true), t('acct.netPosition')],
+            ]}
+          />
+          <ListCard
+            title={t('acct.accountsByCategory')}
+            description={t('acct.accountsByCategoryDesc')}
+          >
+            {lines.map((line) => (
+              <div
+                key={`${line.type}-${line.category}`}
+                className="grid gap-3 border-b p-4 last:border-0 md:grid-cols-[1fr_120px_120px_120px] md:items-center"
+              >
+                <div>
+                  <p className="text-sm font-medium">{line.category}</p>
+                  <p className="text-xs text-muted-foreground">{line.type}</p>
+                </div>
+                <Value label={t('acct.total')} value={money(line.total)} />
+                <Value label={t('acct.entries')} value={String(line.count)} />
+                <Badge variant="outline" className={line.type === 'Income' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-700'}>
+                  {line.type}
+                </Badge>
+              </div>
+            ))}
+            {!loading && lines.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">{t('acct.noneYet')}</div> : null}
+          </ListCard>
+        </>
+      ) : (
+        <ListCard
+          title={translateEnum(journalLabels, lang, tab)}
+          description={t('journals.entries', { count: journalRows.length })}
+        >
+          {journalRows.map((row) => (
+            <div
+              key={row.id}
+              className="grid gap-3 border-b p-4 last:border-0 md:grid-cols-[100px_minmax(0,1fr)_minmax(0,1fr)_140px] md:items-center"
+            >
+              <span className="text-xs text-muted-foreground">{row.date}</span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{row.party}</p>
+                <p className="truncate text-xs text-muted-foreground">{row.reference}</p>
+              </div>
+              <p className="truncate text-xs text-muted-foreground">
+                {row.accountCode ? `${row.accountCode} — ${translateEnum(accountLabels, lang, row.accountCode)}` : '—'}
+              </p>
+              <p className="text-right font-mono text-sm font-semibold">{row.amount}</p>
+            </div>
+          ))}
+          {!loading && journalRows.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">{t('journals.noneYet')}</div> : null}
+          {journalRows.length > 0 ? (
+            <div className="flex items-center justify-between border-t bg-muted/20 p-4 text-sm font-semibold">
+              <span>{t('acct.total')}</span>
+              <span className="font-mono">{money(journalTotal)}</span>
+            </div>
+          ) : null}
+        </ListCard>
+      )}
     </div>
+  );
+}
+
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${active ? 'bg-card shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+    >
+      {children}
+    </button>
   );
 }
 
