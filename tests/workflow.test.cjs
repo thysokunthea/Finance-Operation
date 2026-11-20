@@ -1822,4 +1822,194 @@ test('vendor and supplier contacts reuse expense counterparties and enforce work
   assert.deepEqual((await response.json()).vendors, []);
 });
 
+test('bilingual sales registers import invoice values despite unrelated formula errors and copied views', async () => {
+  const X = require('xlsx');
+  const importer = load('db/spreadsheet-import.ts');
+  const planner = load('lib/cashbook-import.ts');
+  const u = await user('admin', 'sales-register-test');
+  const header = [
+    'Date',
+    'Invoice No.',
+    'Buyer',
+    'VAT TIN',
+    'Descriptions',
+    'VAT Invoice',
+    'Normal Invoice',
+    'Amount',
+    'Remark',
+  ];
+  const first = [
+    '2026-11-03',
+    'SALE-1',
+    'Example buyer',
+    'TIN-1',
+    'Training',
+    200,
+    0,
+    200,
+    'AR',
+  ];
+  const second = [
+    '2026-11-04',
+    'SALE-2',
+    'Second buyer',
+    '',
+    'Consulting',
+    0,
+    50,
+    250,
+    'Processing',
+  ];
+  const master = X.utils.aoa_to_sheet([
+    ['SALE RECORD'],
+    [
+      'ថ្ងៃខែឆ្នាំ',
+      'លេខវិក័យប័ត្រ',
+      'អ្នកទិញ',
+      'លេខអត្តសញ្ញាណកម្មសារពើពន្ធ',
+      'បរិយាយ',
+      'វិក្កយបត្រអាករ',
+      'វិក្កយបត្រ',
+      'តម្លៃសរុបថ្លៃលក់',
+      'កំណត់ចំណាំ',
+    ],
+    header,
+    first,
+    second,
+    [
+      '2026-11-05',
+      'SALE-BAD',
+      'Example buyer',
+      '',
+      'Formula amount',
+      0,
+      0,
+      250,
+      '',
+    ],
+    ['', '', '', '', '', 0, 30, 280, ''],
+    ['', '', '', '', '', 200, 80, 280, ''],
+  ]);
+  master.G6 = { t: 'e', v: 23, f: 'Missing!A1' };
+  master.F8 = { t: 'n', v: 200, f: 'SUM(F4:F7)' };
+  master.G8 = { t: 'n', v: 80, f: 'SUM(G4:G7)' };
+  master.F4.z = master.G5.z = '$0.00';
+  const mirror = X.utils.aoa_to_sheet([['SALE RECORD'], header, first, second]);
+  X.utils.sheet_add_aoa(mirror, [['', '', '', '', '', 0, 30, 280, '']], {
+    origin: 'A7',
+  });
+  mirror.F3.z = mirror.G4.z = '$0.00';
+  const unrelated = X.utils.aoa_to_sheet([
+    ['Other planning sheet'],
+    ['Formula'],
+  ]);
+  unrelated.A2 = { t: 'e', v: 23, f: '#REF!' };
+  const wb = X.utils.book_new();
+  X.utils.book_append_sheet(wb, unrelated, 'Planning');
+  X.utils.book_append_sheet(wb, mirror, 'Sale inv Normal');
+  X.utils.book_append_sheet(wb, master, 'Sale inv All');
+  const bytes = Buffer.from(X.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+  const options = {
+    type: 'Expense',
+    defaultCurrency: 'KHR',
+    department: 'Sales',
+  };
+  const file = await docs.uploadDocument(
+    {
+      fileName: 'Academy Sale book.xlsx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      sizeBytes: bytes.length,
+      contentBase64: bytes.toString('base64'),
+    },
+    u,
+  );
+  const result = await importer.createSpreadsheetTransactions(
+    file.id,
+    options,
+    u,
+  );
+  assert.equal(result.batch, true);
+  assert.equal(result.createdCount, 2);
+  assert.equal(result.totalRows, 4);
+  assert.equal(result.reviewCount, 2);
+  assert.deepEqual(
+    result.transactions.map((r) => r.currency),
+    ['USD', 'USD'],
+  );
+  assert.deepEqual(
+    result.transactions.map((r) => r.type),
+    ['Income', 'Income'],
+  );
+  assert.deepEqual(
+    result.transactions.map((r) => r.amount),
+    ['$200.00', '$50.00'],
+  );
+  assert.ok(
+    result.transactions.every(
+      (r) =>
+        r.sourceDocument.sheet === 'Sale inv All' &&
+        r.status === 'Pending' &&
+        r.journalType === 'sales',
+    ),
+  );
+  assert.match(result.transactions[0].description, /Source remark: AR/);
+  assert.match(
+    result.rows.find((r) => r.row === 6).issues.join(' '),
+    /formula/,
+  );
+  assert.match(result.rows.find((r) => r.row === 7).issues.join(' '), /Date/);
+  const retry = await importer.createSpreadsheetTransactions(
+    file.id,
+    options,
+    u,
+  );
+  assert.equal(retry.createdCount, 0);
+  assert.equal(retry.duplicateCount, 2);
+  // A conflicting copy blocks the corresponding invoice; the value is never chosen silently.
+  mirror.F3 = { t: 'n', v: 201, z: '$0.00' };
+  const conflicted = Buffer.from(
+    X.write(wb, { type: 'buffer', bookType: 'xlsx' }),
+  );
+  const plan = planner.planCashbookImport(
+    conflicted.buffer.slice(
+      conflicted.byteOffset,
+      conflicted.byteOffset + conflicted.byteLength,
+    ),
+    'conflict',
+    { ...options, salesbook: true },
+  );
+  assert.match(
+    plan.entries.find((e) => e.draft.reference === 'SALE-1').issues.join(' '),
+    /Conflicting copies/,
+  );
+  const unknown = X.utils.book_new();
+  X.utils.book_append_sheet(
+    unknown,
+    X.utils.aoa_to_sheet([['Unrecognized register'], ['Value', 5]]),
+    'Sheet1',
+  );
+  const raw = Buffer.from(
+    X.write(unknown, { type: 'buffer', bookType: 'xlsx' }),
+  );
+  const missing = await docs.uploadDocument(
+    {
+      fileName: 'Unknown Sale Book.xlsx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      sizeBytes: raw.length,
+      contentBase64: raw.toString('base64'),
+    },
+    u,
+  );
+  const review = await importer.createSpreadsheetTransactions(
+    missing.id,
+    options,
+    u,
+  );
+  assert.equal(review.batch, true);
+  assert.equal(review.createdCount, 0);
+  assert.match(review.issues.join(' '), /not been treated as a single invoice/);
+});
+
 after(async () => pg.close());

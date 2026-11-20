@@ -19,8 +19,10 @@ export function readSpreadsheetSheets(
       'This Excel file could not be read. Save an unprotected copy as .xlsx or .xls and try again.',
     );
   }
-  const sheets: { name: string; rows: { row: number; cells: string[] }[] }[] =
-    [];
+  const sheets: {
+    name: string;
+    rows: { row: number; cells: string[]; aggregateColumns?: number[] }[];
+  }[] = [];
   let characters = 0;
   for (const name of workbook.SheetNames) {
     const sheet = workbook.Sheets[name];
@@ -30,11 +32,18 @@ export function readSpreadsheetSheets(
       throw new Error(
         'This Excel sheet is too large for automatic reading. Use at most 1,000 rows and 64 columns per sheet.',
       );
-    const rows: { row: number; cells: string[] }[] = [];
+    const rows: {
+      row: number;
+      cells: string[];
+      aggregateColumns?: number[];
+    }[] = [];
     for (let r = range.s.r; r <= range.e.r; r++) {
       const row: string[] = [];
+      const aggregateColumns: number[] = [];
       for (let c = range.s.c; c <= range.e.c; c++) {
         const cell = sheet[utils.encode_cell({ r, c })];
+        if (cell?.f && /^\+?(SUM|SUBTOTAL|AGGREGATE)\(/i.test(cell.f.trim()))
+          aggregateColumns.push(c - range.s.c);
         const cellError = cell?.t === 'e' || (cell?.f && cell.v == null);
         if (cellError && !allowCellErrors)
           throw new Error(
@@ -53,7 +62,12 @@ export function readSpreadsheetSheets(
         row.push(value.trim().replace(/\r?\n/g, ' '));
       }
       while (row.length && !row[row.length - 1]) row.pop();
-      if (row.some(Boolean)) rows.push({ row: r + 1, cells: row });
+      if (row.some(Boolean))
+        rows.push({
+          row: r + 1,
+          cells: row,
+          ...(aggregateColumns.length ? { aggregateColumns } : {}),
+        });
     }
     if (rows.length) sheets.push({ name, rows });
   }

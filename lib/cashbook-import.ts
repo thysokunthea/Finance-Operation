@@ -10,6 +10,7 @@ import type { AutomaticOptions } from './automatic-transaction';
 export type CashbookOptions = AutomaticOptions & {
   defaultCurrency?: 'USD' | 'KHR';
   cashbook?: boolean;
+  salesbook?: boolean;
 };
 export type CashbookRow = {
   sheet: string;
@@ -21,6 +22,12 @@ export type CashbookRow = {
 };
 const normalize = (value: string) =>
   value.toLowerCase().replace(/[\s\u200b-\u200f\ufeff_().:/#$-]+/g, '');
+const sourceText = (value: string) =>
+  value
+    .replace(/[\u200b-\u200f\ufeff]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
 const aliases = {
   date: [
     'date',
@@ -32,6 +39,7 @@ const aliases = {
   ],
   description: [
     'description',
+    'descriptions',
     'details',
     'particulars',
     'narration',
@@ -61,7 +69,7 @@ const aliases = {
     'ប្រាក់ចេញ',
     'ចំណាយ',
   ],
-  amount: ['amount', 'total', 'totalamount', 'ចំនួនទឹកប្រាក់'],
+  amount: ['amount', 'total', 'totalamount', 'ចំនួនទឹកប្រាក់', 'តម្លៃសរុបថ្លៃលក់'],
   type: ['type', 'transactiontype'],
   reference: [
     'reference',
@@ -74,6 +82,7 @@ const aliases = {
     'voucher',
     'លេខយោង',
     'លេខវិក្កយបត្រ',
+    'លេខវិក័យប័ត្រ',
   ],
   party: [
     'party',
@@ -81,16 +90,21 @@ const aliases = {
     'vendor',
     'supplier',
     'customer',
+    'buyer',
     'payee',
     'payer',
     'អតិថិជន',
     'អ្នកផ្គត់ផ្គង់',
     'ឈ្មោះអ្នកផ្គត់ផ្គង់',
+    'អ្នកទិញ',
   ],
   currency: ['currency', 'ccy', 'រូបិយប័ណ្ណ'],
   rate: ['exchangerate', 'rate', 'khrperusd', 'អត្រាប្ដូរប្រាក់'],
   tax: ['tax', 'vat', 'taxamount', 'vatamount', 'ពន្ធ', 'អាករ'],
   subtotal: ['subtotal', 'amountbeforetax', 'សរុបមុនពន្ធ'],
+  remark: ['remark', 'remarks', 'កំណត់ចំណាំ'],
+  vatInvoice: ['vatinvoice', 'វិក្កយបត្រអាករ'],
+  normalInvoice: ['normalinvoice', 'វិក្កយបត្រ'],
 } as const;
 type Field = keyof typeof aliases;
 function columns(cells: string[]) {
@@ -151,8 +165,18 @@ export function planCashbookImport(
   const sheets = readSpreadsheetSheets(data, true);
   const entries: CashbookRow[] = [];
   const sheetIssues: string[] = [];
+  const unrecognizedSheets: string[] = [];
   let foundTable = false;
-  for (const sheet of sheets) {
+  // Prefer the complete sales register over its VAT/normal/AR copies.
+  const ordered = [...sheets].sort(
+    (a, b) =>
+      Number(/sale.*\ball\b/i.test(b.name)) -
+      Number(/sale.*\ball\b/i.test(a.name)),
+  );
+  const salesEntries = new Map<string, CashbookRow>();
+  const masterSalesReferences = new Set<string>();
+  const masterAnonymousRows = new Set<string>();
+  for (const sheet of ordered) {
     const headerIndex = sheet.rows.slice(0, 50).findIndex(({ cells }) => {
       const map = columns(cells);
       return (
@@ -164,7 +188,7 @@ export function planCashbookImport(
       );
     });
     if (headerIndex < 0) {
-      sheetIssues.push(sheet.name + ': no transaction table found.');
+      unrecognizedSheets.push(sheet.name + ': no transaction table found.');
       continue;
     }
     foundTable = true;
@@ -173,6 +197,36 @@ export function planCashbookImport(
       sheet.rows[headerIndex + 1]?.cells,
     );
     const map = columns(header);
+    const salesContext =
+      options.salesbook ||
+      /sale.*(?:inv|record|book)/i.test(sheet.name) ||
+      sheet.rows
+        .slice(0, headerIndex)
+        .some((row) => /\bsale(?:s)?\s+record\b/i.test(row.cells.join(' ')));
+    const masterSales = salesContext && /sale.*\ball\b/i.test(sheet.name);
+    let copiedSalesSheet = false;
+    if (
+      salesContext &&
+      !masterSales &&
+      masterSalesReferences.size &&
+      /sale|\bar\b/i.test(sheet.name) &&
+      map.reference !== undefined
+    ) {
+      const references = sheet.rows
+        .slice(headerIndex + 1)
+        .map((row) => row.cells[map.reference!] || '')
+        .map(sourceText)
+        .filter(
+          (value) =>
+            value &&
+            !(aliases.reference as readonly string[])
+              .map(normalize)
+              .includes(normalize(value)),
+        );
+      copiedSalesSheet =
+        !!references.length &&
+        references.every((reference) => masterSalesReferences.has(reference));
+    }
     const cashbookContext =
       options.cashbook ||
       sheet.rows
@@ -182,7 +236,18 @@ export function planCashbookImport(
             row.cells.join(' ').replace(/[\u200b-\u200f\ufeff]/g, ''),
           ),
         );
+    const salesInvoiceColumns = salesContext
+      ? [map.vatInvoice, map.normalInvoice].filter(
+          (index): index is number => index !== undefined,
+        )
+      : [];
     const movementColumns = header.flatMap((label, index) => {
+      // Sales books may label a running balance "Amount". Invoice value comes
+      // from the VAT / normal invoice columns, never from that cumulative balance.
+      if (salesInvoiceColumns.length)
+        return salesInvoiceColumns.includes(index)
+          ? [{ index, kind: 'amount', currency: currencyOf(label) }]
+          : [];
       const field = columns([label]);
       const kind =
         field.receipt !== undefined
@@ -211,11 +276,51 @@ export function planCashbookImport(
         continue;
       // Ignore repeated headers and balance-only lines, but report malformed movement rows.
       if (normalize(get('date')) === normalize(header[map.date!])) continue;
+      const repeated = columns(source.cells);
+      if (
+        repeated.date !== undefined &&
+        repeated.description !== undefined &&
+        repeated.amount !== undefined
+      )
+        continue;
       const movements = movementColumns.map((column) => ({
         ...column,
         raw: source.cells[column.index] || '',
         value: valueNumber(source.cells[column.index] || ''),
       }));
+      if (
+        salesContext &&
+        !get('date') &&
+        !get('reference') &&
+        !description &&
+        !get('party') &&
+        movements.some((m) => m.value > 0) &&
+        movements.every(
+          (m) => m.value === 0 || source.aggregateColumns?.includes(m.index),
+        )
+      )
+        continue;
+      const anonymous =
+        !get('date') && !get('reference') && !description && !get('party');
+      const anonymousKey = JSON.stringify([
+        source.row,
+        movements
+          .filter((m) => m.value !== 0)
+          .map((m) => [
+            columns([header[m.index]]).vatInvoice !== undefined
+              ? 'vat'
+              : 'normal',
+            m.value,
+            currencyOf(m.raw) || m.currency || options.defaultCurrency,
+          ]),
+      ]);
+      if (
+        anonymous &&
+        copiedSalesSheet &&
+        masterAnonymousRows.has(anonymousKey)
+      )
+        continue;
+      if (anonymous && masterSales) masterAnonymousRows.add(anonymousKey);
       if (movements.every((movement) => movement.value === 0)) continue;
       // Signatures and job titles below the table are not movement rows.
       if (
@@ -231,7 +336,9 @@ export function planCashbookImport(
       const issues: string[] = [];
       if (
         (Object.keys(map) as Field[]).some(
-          (key) => get(key) === unreadableSpreadsheetCell,
+          (key) =>
+            !(key === 'amount' && salesInvoiceColumns.length) &&
+            get(key) === unreadableSpreadsheetCell,
         ) ||
         movements.some((movement) => movement.raw === unreadableSpreadsheetCell)
       )
@@ -264,7 +371,9 @@ export function planCashbookImport(
           ? 'Income'
           : /^(expense|payment|paid|ចំណាយ)$/.test(printedType)
             ? 'Expense'
-            : options.type;
+            : salesContext
+              ? 'Income'
+              : options.type;
       const amount = movement.value;
       if (!(amount > 0))
         issues.push('A positive transaction amount is required.');
@@ -290,7 +399,7 @@ export function planCashbookImport(
       }
       if (!description) issues.push('Description is required.');
       const printedCurrency = get('currency').toUpperCase();
-      const sourceCurrency = movement.currency;
+      const sourceCurrency = movement.currency || currencyOf(movement.raw);
       const currency =
         printedCurrency || sourceCurrency || options.defaultCurrency || '';
       if (
@@ -327,7 +436,9 @@ export function planCashbookImport(
             ? `CB-${sheet.name}-${source.row}`
             : get('reference'),
         party: get('party') || 'Cash book entry',
-        description,
+        description:
+          description +
+          (get('remark') ? '\nSource remark: ' + get('remark') : ''),
         department: options.department || 'Operations',
         category: account.name,
         amount: Number.isFinite(amount) ? String(amount) : '',
@@ -347,17 +458,49 @@ export function planCashbookImport(
         taxTreatment: 'Review required',
         sourceDocument: { id: documentId, sheet: sheet.name, row: source.row },
       };
-      entries.push({
+      const entry: CashbookRow = {
         sheet: sheet.name,
         row: source.row,
         draft,
         issues,
         warnings,
         cashMovement,
-      });
+      };
+      // A reference copied to another sales worksheet remains one invoice.
+      // Conflicting copies require review rather than selecting a financial value silently.
+      const saleKey =
+        salesContext && get('reference')
+          ? JSON.stringify([
+              sourceText(get('reference')),
+              date,
+              sourceText(get('party')),
+              currency,
+              type,
+            ])
+          : '';
+      const previous = saleKey ? salesEntries.get(saleKey) : undefined;
+      if (previous && previous.sheet !== sheet.name) {
+        if (
+          previous.draft.amount !== draft.amount ||
+          previous.draft.subtotal !== draft.subtotal ||
+          previous.draft.tax !== draft.tax ||
+          previous.draft.description?.split('\nSource remark:')[0] !==
+            description
+        )
+          previous.issues.push(
+            'Conflicting copies of this sales invoice appear in multiple worksheets. Review the source values.',
+          );
+        else if (entry.issues.length) previous.issues.push(...entry.issues);
+        continue;
+      }
+      if (saleKey) salesEntries.set(saleKey, entry);
+      if (masterSales && get('reference'))
+        masterSalesReferences.add(sourceText(get('reference')));
+      entries.push(entry);
     }
   }
   if (entries.length > 1000)
     throw new Error('Import at most 1,000 transaction rows per workbook.');
+  if (!foundTable) sheetIssues.push(...unrecognizedSheets);
   return { foundTable, entries, sheetIssues };
 }

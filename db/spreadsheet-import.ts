@@ -54,13 +54,14 @@ export async function createSpreadsheetTransactions(
   const plan = planCashbookImport(array, documentId, {
     ...options,
     cashbook: /cash[\s_\u200b-\u200f-]*book/i.test(document.filename),
+    salesbook: /sale(?:s)?[\s_\u200b-\u200f-]*book/i.test(document.filename),
   });
   if (
     !plan.foundTable &&
-    /cash[\s_\u200b-\u200f-]*book/i.test(document.filename)
+    /(?:cash|sales?)[\s_\u200b-\u200f-]*book/i.test(document.filename)
   ) {
     const issues = [
-      'Cash book columns could not be recognized. The file was kept for review; it has not been treated as an invoice.',
+      'Workbook transaction columns could not be recognized. The file was kept for review; it has not been treated as a single invoice.',
       ...plan.sheetIssues,
     ];
     await executeBatch([
