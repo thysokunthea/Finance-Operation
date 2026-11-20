@@ -1740,4 +1740,86 @@ test('existing cash book settlements are corrected without marking ordinary expe
   );
 });
 
+test('vendor and supplier contacts reuse expense counterparties and enforce workspace, role and version boundaries', async () => {
+  const contacts = load('db/vendors.ts');
+  const api = load('app/api/vendors/route.ts');
+  const u = await user('admin', 'vendor-workspace');
+  let list = await contacts.saveVendor(
+    {
+      name: 'ផ្គត់ផ្គង់ Test',
+      kind: 'Both',
+      email: 'sales@example.test',
+      phone: '012345678',
+      taxId: 'VAT-123',
+    },
+    u,
+  );
+  assert.equal(list.length, 1);
+  const contact = list[0];
+  assert.equal(contact.kind, 'Both');
+  assert.equal(contact.email, 'sales@example.test');
+  await assert.rejects(
+    () => contacts.saveVendor({ name: ' ផ្គត់ផ្គង់ Test ' }, u),
+    /already exists/,
+  );
+  await assert.rejects(
+    () => contacts.saveVendor({ name: 'Invalid', email: 'bad-email' }, u),
+    /valid email/,
+  );
+  const expense = await tx.saveTransactionRecord(
+    record('VENDOR-TX', { type: 'Expense', party: contact.name }),
+    u,
+  );
+  const stored = (
+    await pg.query(
+      'SELECT counterparty_id FROM transactions WHERE transaction_number=$1 AND organization_id=$2',
+      [expense.id, u.organizationId],
+    )
+  ).rows[0];
+  assert.equal(stored.counterparty_id, contact.id);
+  assert.equal((await contacts.listVendors(u)).length, 1);
+  await contacts.saveVendor(
+    { ...contact, name: 'Updated supplier', status: 'Inactive' },
+    u,
+  );
+  assert.equal(
+    (await tx.listTransactionRecords())[0].party,
+    'Updated supplier',
+  );
+  await assert.rejects(
+    () => contacts.saveVendor({ ...contact, phone: '999' }, u),
+    /changed/,
+  );
+  assert.equal((await contacts.listVendors(u))[0].status, 'Inactive');
+  await tx.saveTransactionRecord(
+    record('VENDOR-AUTO', { type: 'Expense', party: 'Imported vendor' }),
+    u,
+  );
+  list = await contacts.listVendors(u);
+  assert.equal(list.length, 2);
+  assert.equal(list.find((v) => v.name === 'Imported vendor').kind, 'Vendor');
+  const viewer = await user('viewer', 'vendor-workspace');
+  assert.equal((await contacts.listVendors(viewer)).length, 2);
+  await assert.rejects(
+    () => contacts.saveVendor({ name: 'Forbidden' }, viewer),
+    /Forbidden/,
+  );
+  const forbidden = await api.POST(
+    new Request('https://example.test/api/vendors', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Blocked' }),
+    }),
+  );
+  assert.equal(forbidden.status, 403);
+  const other = await user('admin', 'vendor-other');
+  assert.equal((await contacts.listVendors(other)).length, 0);
+  await assert.rejects(
+    () => contacts.saveVendor({ ...contact }, other),
+    /unavailable/,
+  );
+  const response = await api.GET();
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).vendors, []);
+});
+
 after(async () => pg.close());

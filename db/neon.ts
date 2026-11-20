@@ -88,6 +88,7 @@ async function initializeCoreSchema(): Promise<void> {
       created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
       version integer NOT NULL DEFAULT 1, UNIQUE (organization_id, code)
     )`,
+    `ALTER TABLE counterparties ADD COLUMN IF NOT EXISTS contact_json text NOT NULL DEFAULT '{}'`,
     `CREATE TABLE IF NOT EXISTS departments (
       id text PRIMARY KEY, organization_id text NOT NULL REFERENCES organizations(id),
       code text NOT NULL, name text NOT NULL,

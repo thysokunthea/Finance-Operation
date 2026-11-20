@@ -78,6 +78,12 @@ const primaryNav = [
     href: '/payment-requests',
   },
   {
+    key: 'vendors',
+    labelKey: 'nav.vendors',
+    icon: Building2,
+    href: '/vendors',
+  },
+  {
     key: 'budgets',
     labelKey: 'nav.budgets',
     icon: BarChart3,

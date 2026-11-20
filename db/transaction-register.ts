@@ -227,7 +227,15 @@ export async function saveTransactionRecord(
   }
 
   const userId = `user-${stableKey(scopedKey(organizationId, user.userId))}`;
-  const counterpartyId = `counterparty-${stableKey(scopedKey(organizationId, record.party.toLowerCase()))}`;
+  const matchedParty = (
+    await query<{ id: string }>(
+      'SELECT id FROM counterparties WHERE organization_id=$1 AND LOWER(TRIM(name))=LOWER(TRIM($2)) ORDER BY created_at,id LIMIT 1',
+      [organizationId, record.party],
+    )
+  )[0];
+  const counterpartyId =
+    matchedParty?.id ||
+    `counterparty-${stableKey(scopedKey(organizationId, record.party.toLowerCase()))}`;
   const departmentId = `department-${stableKey(scopedKey(organizationId, record.department.toLowerCase()))}`;
   const existing = (
     await query<Record<string, unknown>>(

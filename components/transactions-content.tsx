@@ -178,6 +178,24 @@ export function TransactionsContent({
 }) {
   const { t, lang } = useLanguage();
   const [records, setRecords] = useState<TransactionRow[]>(initialRows);
+  const [vendorNames, setVendorNames] = useState<string[]>([]);
+  useEffect(() => {
+    let active = true;
+    fetch('/api/vendors', { cache: 'no-store' })
+      .then(async (response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (active && payload?.vendors)
+          setVendorNames(
+            payload.vendors
+              .filter((v: { status: string }) => v.status === 'Active')
+              .map((v: { name: string }) => v.name),
+          );
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
   const [loadingRecords, setLoadingRecords] = useState(true);
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState(() =>
@@ -1964,12 +1982,22 @@ export function TransactionsContent({
               <Field label={t('field.customerVendor')}>
                 <Input
                   required
+                  list={
+                    draft.type === 'Expense' ? 'transaction-vendors' : undefined
+                  }
                   value={draft.party}
                   onChange={(event) =>
                     setDraft({ ...draft, party: event.target.value })
                   }
                   className="mt-2"
                 />
+                <datalist id="transaction-vendors">
+                  {vendorNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </datalist>
               </Field>
               <Field label={t('tx.department')}>
                 <select
