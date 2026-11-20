@@ -1,15 +1,20 @@
 import { enhanceCanvas, prepareImage } from './document-image';
+import {
+  automaticDocumentFormat,
+  unsupportedDocumentMessage,
+} from './document-format';
 
 /** Runs locally in the browser; source documents are never sent to an OCR vendor. */
 export async function readDocumentText(
   file: File,
   progress: (percent: number) => void = () => {},
 ) {
-  if (
-    /\.(txt|csv)$/i.test(file.name) ||
-    file.type === 'text/plain' ||
-    file.type === 'text/csv'
-  ) {
+  const format = automaticDocumentFormat(file.name, file.type);
+  if (format === 'excel') {
+    const { readSpreadsheetText } = await import('./spreadsheet-document');
+    return readSpreadsheetText(await file.arrayBuffer());
+  }
+  if (format === 'text') {
     const text = await file.text();
     if (text.length > 100000)
       throw new Error('Large text documents require manual review.');
@@ -17,7 +22,7 @@ export async function readDocumentText(
   }
   let text = '';
   const images: HTMLCanvasElement[] = [];
-  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+  if (format === 'pdf') {
     const pdfjs = await import('pdfjs-dist');
     pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
     const loadingTask = pdfjs.getDocument({
@@ -53,15 +58,8 @@ export async function readDocumentText(
     } finally {
       await loadingTask.destroy();
     }
-  } else if (
-    file.type.startsWith('image/') ||
-    /\.(png|jpe?g|webp)$/i.test(file.name)
-  )
-    images.push(await prepareImage(file));
-  else
-    throw new Error(
-      'This file type needs manual entry. Automatic reading supports PDF, images, TXT and CSV documents.',
-    );
+  } else if (format === 'image') images.push(await prepareImage(file));
+  else throw new Error(unsupportedDocumentMessage);
   if (images.length) {
     const { createWorker } = await import('tesseract.js');
     const worker = await createWorker('eng+khm', 1, {

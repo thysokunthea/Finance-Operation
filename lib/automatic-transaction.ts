@@ -20,6 +20,7 @@ export function planAutomaticTransaction(
     key
       .replace(/([a-z])([A-Z])/g, '$1 $2')
       .replace(/[_-]+/g, ' ')
+      .replace(/\s*[:：]$/, '')
       .trim();
   const isField = (key: string) =>
     /^(invoice (no\.?|number)|receipt (no\.?|number)|reference|reference number|date|invoice date|issue date|description|details|vendor|supplier|customer|currency|amount|total|grand total|subtotal|tax|exchange rate|type|transaction type|department|លេខវិក្កយបត្រ|អ្នកផ្គត់ផ្គង់|អតិថិជន|កាលបរិច្ឆេទ|បរិយាយ|រូបិយប័ណ្ណ|សរុប)$/i.test(
@@ -29,7 +30,7 @@ export function planAutomaticTransaction(
     const rows = parseCsv(text);
     if (rows.length === 2 && rows[0].length > 1 && rows[0].every(isField))
       source = rows[0]
-        .map((key, index) => fieldName(key) + ': ' + rows[1][index])
+        .map((key, index) => fieldName(key) + ': ' + (rows[1][index] || ''))
         .join('\n');
     else if (
       rows.length &&
@@ -40,7 +41,7 @@ export function planAutomaticTransaction(
         .join('\n');
     else if (rows.length > 2 && rows[0].length > 1 && rows[0].every(isField))
       issues.push(
-        'CSV contains multiple transactions. Use the CSV Import workflow or upload one invoice at a time.',
+        'The table contains multiple transactions. Use the CSV Import workflow or upload one invoice at a time.',
       );
   } catch {
     /* Normal invoice text may contain commas without being a CSV. */
@@ -253,5 +254,8 @@ export function planAutomaticTransaction(
     taxTreatment: 'Review required',
     documentIds: [documentId],
   };
-  return { issues, draft };
+  return {
+    issues: issues[0]?.includes('multiple transactions') ? [issues[0]] : issues,
+    draft,
+  };
 }

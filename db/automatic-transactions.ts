@@ -9,10 +9,14 @@ import {
   type AutomaticOptions,
 } from '@/lib/automatic-transaction';
 import { amountValue, isoDate } from '@/lib/finance';
+import {
+  automaticDocumentFormat,
+  unsupportedDocumentMessage,
+} from '@/lib/document-format';
 
 export async function createAutomaticTransaction(
   documentId: string,
-  input: AutomaticOptions & { text: string },
+  input: AutomaticOptions & { text: string; extractionError?: string },
   user: ChatGPTUser,
 ) {
   authorize(user, 'write');
@@ -53,9 +57,23 @@ export async function createAutomaticTransaction(
       )[0]
     : null;
   const sameTransaction = transactions.find((t) => t.id === sameFile?.id);
-  const plan = planAutomaticTransaction(input.text, documentId, input);
-  if (!/\.(pdf|png|jpe?g|webp|txt|csv)$/i.test(document.filename))
-    plan.issues.push('This document format requires manual review.');
+  const readingIssue = !automaticDocumentFormat(
+    document.filename,
+    document.mimetype,
+  )
+    ? unsupportedDocumentMessage
+    : typeof input.extractionError === 'string' && input.extractionError.trim()
+      ? input.extractionError.trim().slice(0, 500)
+      : !input.text.trim()
+        ? 'No readable text found. Try another file or enter the transaction details manually.'
+        : '';
+  const plan = planAutomaticTransaction(
+    readingIssue ? '' : input.text,
+    documentId,
+    input,
+  );
+  // A failed reader has no evidence to validate. Persist its cause instead of a cascade of missing fields.
+  if (readingIssue) plan.issues = [readingIssue];
   const setProcessing = async (status: string) =>
     executeBatch([
       {

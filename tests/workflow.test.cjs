@@ -805,7 +805,7 @@ test('automatic document creation validates evidence, is idempotent and requires
             u,
           )
         ).status,
-        'needs_review',
+        'created',
       );
       const viewer = await user('viewer', 'automatic-test-org');
       await assert.rejects(
@@ -837,6 +837,171 @@ test('automatic document creation validates evidence, is idempotent and requires
         { params: Promise.resolve({ id: doc.id }) },
       );
       assert.equal(response.status, 200);
+    },
+  );
+  await t.test(
+    'actual XLSX and XLS uploads read cell dates and totals, then create linked records',
+    async () => {
+      const XLSX = require('xlsx');
+      const { readDocumentText } = load('lib/document-reader.ts');
+      for (const bookType of ['xlsx', 'xls']) {
+        const sheet = XLSX.utils.aoa_to_sheet(
+          [
+            ['Invoice'],
+            ['Invoice No:', null, 'EXCEL-' + bookType],
+            ['Vendor', null, 'Tools, Inc.'],
+            ['Invoice Date', null, new Date('2026-11-20T00:00:00Z')],
+            ['Description', null, 'Office supplies'],
+            ['Currency', null, 'USD'],
+            ['Subtotal', null, 100],
+            ['Tax', null, 10],
+            ['Grand Total', null, 110],
+          ],
+          { UTC: true },
+        );
+        sheet.C9.z = '"USD "0.00';
+        const book = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(book, sheet, 'Invoice');
+        const bytes = XLSX.write(book, { type: 'buffer', bookType });
+        const file = new File([bytes], 'invoice.' + bookType);
+        const text = await readDocumentText(file);
+        assert.match(text, /Invoice Date: 2026-11-20/);
+        assert.match(text, /Grand Total: USD 110.00/);
+        const source = await docs.uploadDocument(
+          {
+            fileName: file.name,
+            mimeType:
+              bookType === 'xls'
+                ? 'application/vnd.ms-excel'
+                : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            sizeBytes: bytes.length,
+            contentBase64: bytes.toString('base64'),
+          },
+          u,
+        );
+        const result = await auto.createAutomaticTransaction(
+          source.id,
+          { ...options, text },
+          u,
+        );
+        assert.equal(result.status, 'created');
+        assert.equal(result.transaction.amount, '$110.00');
+        assert.equal(result.transaction.party, 'Tools, Inc.');
+        assert.equal(result.transaction.date, '20 Nov 2026');
+        assert.equal(result.transaction.status, 'Pending');
+        const stored = (
+          await pg.query(
+            'SELECT linked_transaction_id FROM documents WHERE id=$1',
+            [source.id],
+          )
+        ).rows[0];
+        assert.equal(stored.linked_transaction_id, result.transaction.id);
+      }
+    },
+  );
+  await t.test(
+    'Excel tables preserve columns and multiple records require one clear review message',
+    async () => {
+      const XLSX = require('xlsx');
+      const { readDocumentText } = load('lib/document-reader.ts');
+      const rows = [
+        ['reference', 'vendor', 'date', 'description', 'currency', 'amount'],
+        ['XLS-TABLE', 'Tools, Inc.', '2026-11-20', 'Supplies', 'USD', 100],
+      ];
+      const workbook = () => {
+        const book = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(
+          book,
+          XLSX.utils.aoa_to_sheet(rows),
+          'Invoices',
+        );
+        return book;
+      };
+      const readBook = (book) =>
+        readDocumentText(
+          new File(
+            [XLSX.write(book, { type: 'buffer', bookType: 'xlsx' })],
+            'table.xlsx',
+          ),
+        );
+      const one = planner.planAutomaticTransaction(
+        await readBook(workbook()),
+        'table-one',
+        options,
+      );
+      assert.deepEqual(one.issues, []);
+      assert.equal(one.draft.party, 'Tools, Inc.');
+      rows.push([
+        'XLS-TABLE-2',
+        'Other vendor',
+        '2026-11-20',
+        'Other',
+        'USD',
+        10,
+      ]);
+      const many = planner.planAutomaticTransaction(
+        await readBook(workbook()),
+        'table-many',
+        options,
+      );
+      assert.equal(many.issues.length, 1);
+      assert.match(many.issues[0], /multiple transactions/);
+      const book = workbook();
+      XLSX.utils.book_append_sheet(
+        book,
+        XLSX.utils.aoa_to_sheet([['Invoice No', 'ANOTHER']]),
+        'Second',
+      );
+      await assert.rejects(
+        () => readBook(book),
+        /multiple populated worksheets/,
+      );
+      const formulaBook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        formulaBook,
+        {
+          A1: { t: 's', v: 'Total' },
+          B1: { t: 'n', f: 'SUM(1,2)' },
+          '!ref': 'A1:B1',
+        },
+        'Invoice',
+      );
+      await assert.rejects(
+        () => readBook(formulaBook),
+        /formula without a saved result/,
+      );
+    },
+  );
+  await t.test(
+    'reader failures persist only their cause without irrelevant missing-field errors',
+    async () => {
+      const source = await upload('unreadable.xlsx', 'unreadable workbook');
+      const result = await auto.createAutomaticTransaction(
+        source.id,
+        {
+          ...options,
+          text: '',
+          extractionError:
+            'This Excel file could not be read. Save an unprotected copy and retry.',
+        },
+        u,
+      );
+      assert.equal(result.status, 'needs_review');
+      assert.deepEqual(result.issues, [
+        'This Excel file could not be read. Save an unprotected copy and retry.',
+      ]);
+      const saved = (await docs.listDocuments()).find(
+        (d) => d.id === source.id,
+      );
+      assert.deepEqual(saved.suggestedTransaction.issues, result.issues);
+      assert.equal(saved.linkedReference, null);
+      const empty = await auto.createAutomaticTransaction(
+        source.id,
+        { ...options, text: '' },
+        u,
+      );
+      assert.equal(empty.issues.length, 1);
+      assert.match(empty.issues[0], /No readable text/);
     },
   );
 });

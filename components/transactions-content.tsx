@@ -266,6 +266,7 @@ export function TransactionsContent({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text,
+          extractionError: readingIssue || undefined,
           type: type === 'All' ? automaticType : type,
           exchangeRate: conversionRate,
           department: 'Operations',
@@ -277,7 +278,6 @@ export function TransactionsContent({
       error?: string;
     };
     if (!response.ok) throw new Error(result.error || t('tx.autoFailed'));
-    if (readingIssue) result.issues = [readingIssue, ...result.issues];
     if (result.transaction) {
       const transaction = result.transaction;
       setRecords((rows) => [

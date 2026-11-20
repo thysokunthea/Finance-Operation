@@ -306,7 +306,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     'docs.createRecord': 'Create transaction record',
     'tx.autoTitle': 'Automatic Transaction Creation from Uploaded Documents',
     'tx.autoHint':
-      'One transaction per document. Clear invoice details create Pending records automatically. Missing or uncertain details go to review. Records are never automatically approved or paid.',
+      'Supports Excel (.xlsx, .xls), PDF, images, TXT and CSV. One transaction per document. Clear invoice details create Pending records automatically. Missing or uncertain details go to review. Records are never automatically approved or paid.',
     'tx.autoRate': 'KHR per USD (when not printed on the document)',
     'tx.autoRatePlaceholder': 'Required for USD documents',
     'tx.autoProcessing': 'Reading document…',
@@ -929,7 +929,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     'docs.createRecord': 'បង្កើត record ប្រតិបត្តិការ',
     'tx.autoTitle': 'បង្កើតប្រតិបត្តិការស្វ័យប្រវត្តិពីឯកសារដែលផ្ទុកឡើង',
     'tx.autoHint':
-      'មួយប្រតិបត្តិការក្នុងមួយឯកសារ។ ព័ត៌មានវិក្កយបត្រច្បាស់លាស់បង្កើត record រង់ចាំស្វ័យប្រវត្តិ។ ព័ត៌មានខ្វះ ឬមិនច្បាស់ត្រូវពិនិត្យ។ មិនអនុម័ត ឬទូទាត់ស្វ័យប្រវត្តិទេ។',
+      'គាំទ្រ Excel (.xlsx, .xls), PDF រូបភាព TXT និង CSV។ មួយប្រតិបត្តិការក្នុងមួយឯកសារ។ ព័ត៌មានវិក្កយបត្រច្បាស់លាស់បង្កើត record រង់ចាំស្វ័យប្រវត្តិ។ ព័ត៌មានខ្វះ ឬមិនច្បាស់ត្រូវពិនិត្យ។ មិនអនុម័ត ឬទូទាត់ស្វ័យប្រវត្តិទេ។',
     'tx.autoRate': 'អត្រា KHR ក្នុង 1 USD (បើមិនមានលើឯកសារ)',
     'tx.autoRatePlaceholder': 'ត្រូវការសម្រាប់ឯកសារ USD',
     'tx.autoProcessing': 'កំពុងអានឯកសារ…',
