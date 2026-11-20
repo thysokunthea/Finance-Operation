@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { GdtRateField } from './gdt-rate-field';
+import { cambodiaToday } from '@/lib/cambodia-date';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useLanguage } from '@/lib/i18n';
@@ -27,10 +29,9 @@ export function PaymentForm({
   const { lang } = useLanguage();
   const l = (en: string, km: string) => (lang === 'km' ? km : en);
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(cambodiaToday);
   const [method, setMethod] = useState('Bank transfer');
   const [reference, setReference] = useState('');
-  const [rate, setRate] = useState(record.exchangeRate || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const key = useRef(crypto.randomUUID());
@@ -50,7 +51,7 @@ export function PaymentForm({
             date,
             method,
             reference,
-            exchangeRate: record.currency === 'KHR' ? 1 : Number(rate),
+            exchangeRate: record.currency === 'KHR' ? 1 : 0,
             idempotencyKey: key.current,
           });
           onSaved(result.transaction);
@@ -110,14 +111,7 @@ export function PaymentForm({
       {record.currency === 'USD' ? (
         <label className="block text-xs">
           {l('KHR per USD on payment date', 'អត្រា KHR ក្នុង 1 USD នៅថ្ងៃទូទាត់')}
-          <Input
-            required
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={rate}
-            onChange={(e) => setRate(e.target.value)}
-          />
+          <GdtRateField date={date} currency={record.currency} />
         </label>
       ) : null}
       {error ? (
@@ -144,7 +138,7 @@ const blankRequest = (): RequestInput => ({
   exchangeRate: '1',
   party: '',
   department: 'Operations',
-  date: new Date().toISOString().slice(0, 10),
+  date: cambodiaToday(),
   dueDate: '',
   reference: '',
 });
@@ -256,16 +250,7 @@ export function RequestWorkspace() {
         {draft.currency === 'USD' ? (
           <label className="text-sm">
             {l('KHR per USD', 'អត្រា KHR ក្នុង 1 USD')}
-            <Input
-              required
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={draft.exchangeRate}
-              onChange={(e) =>
-                setDraft({ ...draft, exchangeRate: e.target.value })
-              }
-            />
+            <GdtRateField date={draft.date} currency={draft.currency} />
           </label>
         ) : null}
         <label className="text-sm">

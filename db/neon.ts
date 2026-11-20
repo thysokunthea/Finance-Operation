@@ -187,6 +187,7 @@ async function initializeCoreSchema(): Promise<void> {
       method text NOT NULL, reference text NOT NULL, recorded_by text NOT NULL,
       created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(organization_id, transaction_id, reference)
     )`,
+    `ALTER TABLE transaction_payments ADD COLUMN IF NOT EXISTS exchange_rate_source_json text`,
     `CREATE TABLE IF NOT EXISTS closed_periods (
       organization_id text NOT NULL REFERENCES organizations(id), period text NOT NULL,
       closed_by text NOT NULL, closed_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(organization_id, period)

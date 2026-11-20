@@ -1,5 +1,6 @@
 import { executeBatch } from '@/db/neon';
 import { isoDate } from '@/lib/finance';
+import { getGdtRate } from '@/lib/gdt-exchange-rates';
 import { getChatGPTUser, authorize } from '@/app/chatgpt-auth';
 import {
   listTransactionRecords,
@@ -83,10 +84,10 @@ export async function PATCH(request: Request) {
       (item) => item.id === id,
     );
     if (!record) throw new Error('Transaction not found.');
-    if (record.currency === 'USD' && !(Number(record.exchangeRate) > 0))
-      throw new Error(
-        'Enter the KHR per USD exchange rate before submitting this draft.',
-      );
+    const quote =
+      record.currency === 'USD'
+        ? await getGdtRate(isoDate(record.date))
+        : undefined;
     await executeBatch(
       [
         {
@@ -94,8 +95,17 @@ export async function PATCH(request: Request) {
           parameters: [id, user.organizationId],
         },
         {
-          text: `UPDATE transactions SET approval_status = 'Finance review', version = version + 1, updated_at = now() WHERE id = $1 AND organization_id = $2`,
-          parameters: [id, user.organizationId],
+          text: `UPDATE transactions SET approval_status = 'Finance review', metadata_json=CASE WHEN $3::text IS NULL THEN metadata_json ELSE (COALESCE(metadata_json,'{}')::jsonb || $3::jsonb)::text END, version = version + 1, updated_at = now() WHERE id = $1 AND organization_id = $2`,
+          parameters: [
+            id,
+            user.organizationId,
+            quote
+              ? JSON.stringify({
+                  exchangeRate: quote.rate,
+                  exchangeRateSource: quote,
+                })
+              : null,
+          ],
         },
         {
           text: `INSERT INTO audit_logs(id,organization_id,action,resource_type,resource_id,new_json,correlation_id) VALUES($1,$2,'submit','transaction',$3,$4,$1)`,
@@ -103,7 +113,7 @@ export async function PATCH(request: Request) {
             crypto.randomUUID(),
             user.organizationId,
             id,
-            JSON.stringify({ actor: user.userId }),
+            JSON.stringify({ actor: user.userId, exchangeRateSource: quote }),
           ],
         },
       ],

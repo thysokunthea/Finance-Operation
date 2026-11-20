@@ -10,6 +10,7 @@ import {
   saveTransactionRecord,
 } from './transaction-register';
 import { isoDate, minor } from '@/lib/finance';
+import { getGdtRate, type GdtQuote } from '@/lib/gdt-exchange-rates';
 
 export type RequestInput = {
   requestId?: string;
@@ -18,6 +19,7 @@ export type RequestInput = {
   amount: number;
   currency: string;
   exchangeRate: string;
+  exchangeRateSource?: GdtQuote;
   party: string;
   department: string;
   date: string;
@@ -78,6 +80,12 @@ export async function createPaymentRequest(
 ) {
   authorize(user, 'write');
   const org = user.organizationId;
+  input.date = isoDate(input.date);
+  if (input.currency === 'USD') {
+    const quote = await getGdtRate(input.date);
+    input.exchangeRate = quote.rate;
+    input.exchangeRateSource = quote;
+  } else if (input.currency === 'KHR') input.exchangeRate = '1';
   if (
     ![
       input.title,

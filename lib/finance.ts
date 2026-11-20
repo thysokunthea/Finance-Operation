@@ -33,10 +33,36 @@ export function isoDate(value: string | Date) {
       return direct;
     throw new Error('A valid date is required.');
   }
+  // Calendar labels must not shift to yesterday when the server runs in UTC+7.
+  const label = value.match(/^(\d{1,2})[\s-]+([A-Za-z]+)[\s,-]+(\d{2}|\d{4})$/);
+  if (label) {
+    const month = [
+      'jan',
+      'feb',
+      'mar',
+      'apr',
+      'may',
+      'jun',
+      'jul',
+      'aug',
+      'sep',
+      'oct',
+      'nov',
+      'dec',
+    ].indexOf(label[2].slice(0, 3).toLowerCase());
+    if (month < 0) throw new Error('A valid date is required.');
+    const year = label[3].length === 2 ? '20' + label[3] : label[3];
+    return isoDate(
+      `${year}-${String(month + 1).padStart(2, '0')}-${label[1].padStart(2, '0')}`,
+    );
+  }
+  const monthFirst = value.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (monthFirst)
+    return isoDate(`${monthFirst[2]} ${monthFirst[1]} ${monthFirst[3]}`);
   const parsed = new Date(value);
   if (!Number.isFinite(parsed.getTime()))
     throw new Error('A valid date is required.');
-  return parsed.toISOString().slice(0, 10);
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
 }
 export function periodKey() {
   const parts = new Intl.DateTimeFormat('en-CA', {

@@ -3,6 +3,7 @@ import { isoDate, minor, reportingValue } from '@/lib/finance';
 import { workspaceId, scopedKey } from '@/app/chatgpt-auth';
 import type { ChatGPTUser } from '@/app/chatgpt-auth';
 import { executeBatch, query } from '@/db/neon';
+import { getGdtRate, type GdtQuote } from '@/lib/gdt-exchange-rates';
 import {
   classifyJournal,
   getAccount,
@@ -31,6 +32,7 @@ export type TransactionRecord = {
   documentType?: string;
   taxTreatment?: string;
   exchangeRate?: string;
+  exchangeRateSource?: GdtQuote;
   journalType?: string;
   accountCode?: string;
   accountName?: string;
@@ -147,6 +149,7 @@ export async function listTransactionRecords(): Promise<TransactionRecord[]> {
       documentType: payload.documentType || '',
       taxTreatment: payload.taxTreatment || 'Standard VAT 10%',
       exchangeRate: row.currency === 'KHR' ? '1' : payload.exchangeRate || '',
+      exchangeRateSource: payload.exchangeRateSource,
       journalType: payload.journalType || classifyJournal(row.type, row.status),
       accountCode,
       accountName,
@@ -167,8 +170,25 @@ export async function saveTransactionRecord(
     !['USD', 'KHR'].includes(record.currency || '')
   )
     throw new Error('Select a valid type and currency.');
-  if (record.currency === 'KHR') record.exchangeRate = '1';
+  if (record.currency === 'KHR') {
+    record.exchangeRate = '1';
+    record.exchangeRateSource = undefined;
+  }
   const importedDraft = record.approval === 'draft' && !!record.sourceDocument;
+  if (record.currency === 'USD') {
+    try {
+      const quote = await getGdtRate(record.date);
+      record.exchangeRate = quote.rate;
+      record.exchangeRateSource = quote;
+    } catch {
+      if (!importedDraft)
+        throw new Error(
+          'The official GDT rate is unavailable for this date. Try again before saving.',
+        );
+      record.exchangeRate = '';
+      record.exchangeRateSource = undefined;
+    }
+  }
   if (
     !importedDraft &&
     (!Number.isFinite(Number(record.exchangeRate)) ||

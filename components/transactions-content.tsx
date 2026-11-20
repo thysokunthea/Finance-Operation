@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { GdtRateField } from './gdt-rate-field';
+import type { GdtQuote } from '@/lib/gdt-exchange-rates';
+import { useGdtRate } from '@/hooks/use-gdt-rate';
 import { PaymentForm } from './workflow-forms';
 import { readDocumentText } from '@/lib/document-reader';
 import { automaticDocumentFormat } from '@/lib/document-format';
@@ -88,6 +91,7 @@ type TransactionRow = {
   documentType?: string;
   taxTreatment?: string;
   exchangeRate?: string;
+  exchangeRateSource?: GdtQuote;
   journalType?: string;
   accountCode?: string;
   accountName?: string;
@@ -196,6 +200,12 @@ export function TransactionsContent({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState('All departments');
   const [draft, setDraft] = useState<TransactionDraft>(() => blankDraft(type));
+  const draftOfficial = useGdtRate(
+    dialogOpen ? draft.date : '',
+    draft.currency,
+  );
+  const statutoryRate =
+    draft.currency === 'KHR' ? '1' : draftOfficial.quote?.rate || '';
   const [selected, setSelected] = useState<TransactionRow | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TransactionRow | null>(null);
@@ -207,7 +217,6 @@ export function TransactionsContent({
   const [automaticType, setAutomaticType] = useState<'Income' | 'Expense'>(
     type === 'Income' ? 'Income' : 'Expense',
   );
-  const [automaticRate, setAutomaticRate] = useState('');
   const [workbookCurrency, setWorkbookCurrency] = useState<'USD' | 'KHR'>(
     'USD',
   );
@@ -218,12 +227,7 @@ export function TransactionsContent({
   >([]);
   const [scannerFile, setScannerFile] = useState<File | undefined>();
   const uploadBusy = useRef(false);
-  const conversionRate =
-    automaticRate ||
-    records.find(
-      (record) => record.currency === 'USD' && Number(record.exchangeRate) > 0,
-    )?.exchangeRate ||
-    '';
+  const conversionRate = '';
   const openUploadedReview = (
     source: UploadedSource,
     suggestion?: TransactionRow,
@@ -769,7 +773,6 @@ export function TransactionsContent({
     event.preventDefault();
     if (saving) return;
     const numericAmount = Number(draft.amount);
-    const numericExchangeRate = Number(draft.exchangeRate);
     if (
       !draft.party.trim() ||
       !draft.reference.trim() ||
@@ -777,9 +780,7 @@ export function TransactionsContent({
       !draft.description.trim() ||
       !draft.category.trim() ||
       !Number.isFinite(numericAmount) ||
-      numericAmount <= 0 ||
-      !Number.isFinite(numericExchangeRate) ||
-      numericExchangeRate <= 0
+      numericAmount <= 0
     ) {
       showNotice(t('tx.noticeValidation'), true);
       return;
@@ -820,7 +821,7 @@ export function TransactionsContent({
       purchaseOrder: draft.purchaseOrder,
       documentType: draft.documentType,
       taxTreatment: draft.taxTreatment,
-      exchangeRate: draft.currency === 'KHR' ? '1' : draft.exchangeRate,
+      exchangeRate: statutoryRate,
       journalType: draft.journalType,
       accountCode: draft.accountCode,
       accountName: getAccount(draft.accountCode)?.name || '',
@@ -1079,18 +1080,17 @@ export function TransactionsContent({
                 <option value="KHR">KHR</option>
               </select>
             </label>
-            <label className="max-w-56 text-xs">
-              {t('tx.autoRate')}
-              <Input
-                disabled={uploading}
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={conversionRate}
-                placeholder={t('tx.autoRatePlaceholder')}
-                onChange={(event) => setAutomaticRate(event.target.value)}
-              />
-            </label>
+            <p className="max-w-md text-xs text-muted-foreground">
+              {t('tx.gdtAutomaticHint')}{' '}
+              <a
+                href="https://www.tax.gov.kh/en/exchange-rate"
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                GDT
+              </a>
+            </p>
           </div>
         ) : null}
         {automaticProgress ? (
@@ -1566,6 +1566,16 @@ export function TransactionsContent({
                     value={selected.exchangeRate}
                   />
                 ) : null}
+                {selected.exchangeRateSource ? (
+                  <a
+                    className="text-xs underline"
+                    target="_blank"
+                    rel="noreferrer"
+                    href={selected.exchangeRateSource.sourceUrl}
+                  >
+                    GDT · {selected.exchangeRateSource.date}
+                  </a>
+                ) : null}
                 {selected.paymentMethod ? (
                   <Detail
                     label={t('field.paymentMethod')}
@@ -2000,18 +2010,7 @@ export function TransactionsContent({
                 </select>
               </Field>
               <Field label={t('field.exchangeRate')}>
-                <Input
-                  required
-                  type="number"
-                  min="0.000001"
-                  step="0.000001"
-                  value={draft.currency === 'KHR' ? '1' : draft.exchangeRate}
-                  disabled={draft.currency === 'KHR'}
-                  onChange={(event) =>
-                    setDraft({ ...draft, exchangeRate: event.target.value })
-                  }
-                  className="mt-2"
-                />
+                <GdtRateField date={draft.date} currency={draft.currency} />
               </Field>
               <Field label={t('field.subtotal')}>
                 <Input
@@ -2049,17 +2048,10 @@ export function TransactionsContent({
               <Field label={t('field.statutoryKhr')}>
                 <Input
                   value={
-                    Number(draft.amount) > 0 &&
-                    Number(draft.currency === 'KHR' ? 1 : draft.exchangeRate) >
-                      0
+                    Number(draft.amount) > 0 && Number(statutoryRate) > 0
                       ? new Intl.NumberFormat('en-US', {
                           maximumFractionDigits: 0,
-                        }).format(
-                          Number(draft.amount) *
-                            Number(
-                              draft.currency === 'KHR' ? 1 : draft.exchangeRate,
-                            ),
-                        )
+                        }).format(Number(draft.amount) * Number(statutoryRate))
                       : ''
                   }
                   disabled

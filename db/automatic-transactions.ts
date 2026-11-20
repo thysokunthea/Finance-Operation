@@ -9,6 +9,7 @@ import {
   type AutomaticOptions,
 } from '@/lib/automatic-transaction';
 import { amountValue, isoDate } from '@/lib/finance';
+import { getGdtRate } from '@/lib/gdt-exchange-rates';
 import {
   automaticDocumentFormat,
   unsupportedDocumentMessage,
@@ -74,6 +75,22 @@ export async function createAutomaticTransaction(
   );
   // A failed reader has no evidence to validate. Persist its cause instead of a cascade of missing fields.
   if (readingIssue) plan.issues = [readingIssue];
+  if (!readingIssue && plan.draft.currency === 'USD')
+    plan.issues = plan.issues.filter(
+      (issue) => issue !== 'Enter the KHR per USD exchange rate.',
+    );
+  if (!readingIssue && plan.draft.currency === 'USD' && plan.draft.date) {
+    try {
+      const quote = await getGdtRate(plan.draft.date);
+      plan.draft.exchangeRate = quote.rate;
+      plan.draft.exchangeRateSource = quote;
+    } catch {
+      plan.draft.exchangeRate = '';
+      plan.issues.push(
+        'The official GDT rate could not be loaded for this transaction date. Retry automatic creation.',
+      );
+    }
+  }
   const setProcessing = async (status: string) =>
     executeBatch([
       {

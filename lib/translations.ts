@@ -311,6 +311,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'tx.autoStatus.imported': 'Imported',
     'tx.autoStatus.importing': 'Importing',
     'tx.workbookCurrency': 'Workbook currency (when not specified)',
+    'tx.gdtAutomaticHint':
+      'USD/KHR rates are loaded automatically from GDT for each transaction date. The publication date and source are saved with the record.',
     'tx.importRows': 'Imported source rows',
     'tx.cashbookWorkflow':
       'Receipt → Income / Cash Receipts. Payment → Expense / Cash Disbursements. Balance and total rows are excluded. Records require finance review; no automatic approval or payment.',
@@ -940,6 +942,8 @@ export const translations: Record<Lang, Record<string, string>> = {
       'គាំទ្រ Excel (.xlsx, .xls), Word (.docx), PDF រូបភាព TXT និង CSV ជាភាសាខ្មែរ អង់គ្លេស ឬលាយគ្នា។ Cash Book និងតារាង CSV បង្កើត record តាមជួរដេក។ វិក្កយបត្របង្កើតមួយ record។ ព័ត៌មានខ្វះ ឬមិនច្បាស់ត្រូវពិនិត្យ។',
     'tx.autoRate': 'អត្រា KHR ក្នុង 1 USD (បើមិនមានលើឯកសារ)',
     'tx.workbookCurrency': 'រូបិយប័ណ្ណក្នុងសៀវភៅ (បើមិនបានបញ្ជាក់)',
+    'tx.gdtAutomaticHint':
+      'អត្រា USD/KHR ទាញយកពី GDT ស្វ័យប្រវត្តិតាមថ្ងៃប្រតិបត្តិការ។ កាលបរិច្ឆេទផ្សាយ និងប្រភពអត្រាត្រូវបានរក្សាទុកជាមួយ record។',
     'tx.importRows': 'ជួរដេកប្រភពដែលបាននាំចូល',
     'tx.cashbookWorkflow':
       'Receipt → ចំណូល / Cash Receipts។ Payment → ចំណាយ / Cash Disbursements។ មិនរាប់ Balance និងជួរសរុបជាប្រតិបត្តិការទេ។ ត្រូវពិនិត្យមុនអនុម័ត និងទូទាត់។',

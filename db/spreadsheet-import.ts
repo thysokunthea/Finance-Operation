@@ -7,6 +7,7 @@ import {
 import { readSpreadsheetText } from '@/lib/spreadsheet-document';
 import { automaticDocumentFormat } from '@/lib/document-format';
 import { isoDate } from '@/lib/finance';
+import { getGdtRate } from '@/lib/gdt-exchange-rates';
 import { createAutomaticTransaction } from './automatic-transactions';
 import { query, executeBatch } from './neon';
 import {
@@ -142,6 +143,30 @@ export async function createSpreadsheetTransactions(
     const id = entry.draft.id;
     let record = existing.find((t) => t.id === id);
     if (
+      entry.draft.currency === 'USD' &&
+      entry.draft.date &&
+      (!record || record.approval === 'draft')
+    ) {
+      entry.warnings = entry.warnings.filter(
+        (warning) => !warning.includes('exchange rate'),
+      );
+      try {
+        const quote = await getGdtRate(entry.draft.date);
+        entry.draft.exchangeRate = quote.rate;
+        entry.draft.exchangeRateSource = quote;
+        entry.draft.approval = 'Finance review';
+      } catch {
+        entry.draft.exchangeRate = '';
+        entry.draft.approval = 'draft';
+        entry.warnings.push(
+          'The GDT rate is unavailable for this date. This row stays Draft until an official rate is available.',
+        );
+      }
+    } else if (record)
+      entry.warnings = entry.warnings.filter(
+        (warning) => !warning.includes('exchange rate'),
+      );
+    if (
       record &&
       record.approval === 'draft' &&
       !record.exchangeRate &&
@@ -151,6 +176,7 @@ export async function createSpreadsheetTransactions(
         {
           ...record,
           exchangeRate: entry.draft.exchangeRate,
+          exchangeRateSource: entry.draft.exchangeRateSource,
           approval: 'Finance review',
         },
         user,

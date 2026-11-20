@@ -9,6 +9,20 @@ const { PGlite } = require('@electric-sql/pglite');
 // Real PostgreSQL in memory: no credentials, network, production data, or auth bypass in the app.
 const pg = new PGlite();
 const cache = new Map();
+let gdtOffline = false;
+const mockGdtRate = async (date) => {
+  if (gdtOffline) throw new Error('GDT offline in test');
+  return {
+    provider: 'GDT',
+    rate:
+      date === '2026-11-03' ? '4000' : date === '2026-11-05' ? '4050' : '4100',
+    date,
+    requestedDate: date,
+    sourceUrl: 'https://www.tax.gov.kh/en/exchange-rate',
+    retrievedAt: '2026-11-20T00:00:00Z',
+    selection: 'same-day',
+  };
+};
 let current = {
   userId: 'test-admin',
   email: 'admin@example.test',
@@ -49,6 +63,8 @@ function load(filename) {
     },
   }).outputText;
   const req = (id) => {
+    if (id === '@/lib/gdt-exchange-rates')
+      return { getGdtRate: mockGdtRate, cambodiaToday: () => '2026-11-20' };
     if (id === '@neondatabase/serverless') return { neon: () => client };
     if (id === 'next/navigation')
       return {
@@ -508,6 +524,9 @@ test('finance workflow against PostgreSQL', async (t) => {
       );
       assert.throws(() => csv.parseCsv('a,a\n1,2'), /unique/);
       assert.throws(() => finance.isoDate('2026-02-30'), /valid date/);
+      assert.equal(finance.isoDate('3 Nov 2026'), '2026-11-03');
+      assert.equal(finance.isoDate('November 3, 2026'), '2026-11-03');
+      assert.throws(() => finance.isoDate('31 Apr 2026'), /valid date/);
       assert.equal(
         finance.reportingValue({
           amount: '$100',
@@ -1137,7 +1156,7 @@ test('cash book uploads create row transactions and route receipts and payments 
     },
   );
   await t.test(
-    'missing rate creates drafts and one workbook retry supplies it for every imported row',
+    'GDT unavailability creates drafts and retry fetches official rates for imported rows',
     async () => {
       const draftFile = await uploadBook(
         makeBook([
@@ -1151,23 +1170,31 @@ test('cash book uploads create row transactions and route receipts and payments 
           ],
         ]),
       );
-      const result = await importer.createSpreadsheetTransactions(
-        draftFile.id,
-        { ...options, exchangeRate: '' },
-        u,
-      );
+      gdtOffline = true;
+      let result;
+      try {
+        result = await importer.createSpreadsheetTransactions(
+          draftFile.id,
+          { ...options, exchangeRate: '' },
+          u,
+        );
+      } finally {
+        gdtOffline = false;
+      }
       assert.equal(result.createdCount, 1);
       assert.equal(result.reviewCount, 1);
       const record = result.transactions[0];
       assert.equal(record.approval, 'draft');
       assert.equal(record.reportingAmount, null);
       const api = load('app/api/transactions/route.ts');
+      gdtOffline = true;
       const submit = await api.PATCH(
         new Request('http://test/api/transactions', {
           method: 'PATCH',
           body: JSON.stringify({ id: record.id }),
         }),
       );
+      gdtOffline = false;
       assert.equal(submit.status, 400);
       const retry = await importer.createSpreadsheetTransactions(
         draftFile.id,
@@ -1502,6 +1529,68 @@ test('Word DOCX extraction preserves mixed Khmer/English text and Khmer calendar
     () => readDocumentText(new File(['not-a-docx'], 'broken.docx')),
     /Word file could not be read/,
   );
+});
+
+test('GDT rates override client values, preserve payment retries, and fill document rates automatically', async () => {
+  let u = await user('finance', 'gdt-source-test');
+  const saved = await tx.saveTransactionRecord(
+    record('GDT-RATE', { exchangeRate: '999999' }),
+    u,
+  );
+  assert.equal(saved.exchangeRate, '4000');
+  assert.equal(saved.exchangeRateSource.provider, 'GDT');
+  assert.equal(saved.exchangeRateSource.date, '2026-11-03');
+  await approvals.approveTransaction(
+    saved.id,
+    await user('approver', 'gdt-source-test'),
+  );
+  u = await user('finance', 'gdt-source-test');
+  const input = payment(saved.id, 10, 'GDT-PAY', { exchangeRate: 999999 });
+  await payments.recordPayment(input, u);
+  const stored = (
+    await pg.query(
+      'SELECT exchange_rate,exchange_rate_source_json FROM transaction_payments WHERE id=$1',
+      [input.idempotencyKey],
+    )
+  ).rows[0];
+  assert.equal(Number(stored.exchange_rate), 4050);
+  assert.equal(JSON.parse(stored.exchange_rate_source_json).date, '2026-11-05');
+  gdtOffline = true;
+  try {
+    assert.equal((await payments.recordPayment(input, u)).paidAmount, 10);
+  } finally {
+    gdtOffline = false;
+  }
+  const text =
+    'Invoice No: GDT-AUTO\nVendor: Sample supplier\nDate: 2026-11-06\nDescription: Supplies\nTotal: USD 15';
+  const bytes = Buffer.from(text);
+  const source = await docs.uploadDocument(
+    {
+      fileName: 'invoice.txt',
+      mimeType: 'text/plain',
+      contentBase64: bytes.toString('base64'),
+    },
+    u,
+  );
+  const result = await load(
+    'db/automatic-transactions.ts',
+  ).createAutomaticTransaction(source.id, { type: 'Expense', text }, u);
+  assert.equal(result.status, 'created');
+  assert.equal(result.transaction.exchangeRate, '4100');
+  assert.equal(result.transaction.exchangeRateSource.provider, 'GDT');
+  const draft = await tx.saveTransactionRecord(record('GDT-SUBMIT'), u);
+  await pg.query(
+    `UPDATE transactions SET approval_status='draft',metadata_json=(metadata_json::jsonb || '{"exchangeRate":""}'::jsonb)::text WHERE id=$1`,
+    [draft.id],
+  );
+  const response = await load('app/api/transactions/route.ts').PATCH(
+    new Request('http://test/api/transactions', {
+      method: 'PATCH',
+      body: JSON.stringify({ id: draft.id }),
+    }),
+  );
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).transaction.exchangeRate, '4000');
 });
 
 after(async () => pg.close());

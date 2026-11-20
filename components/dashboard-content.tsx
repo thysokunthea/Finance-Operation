@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useGdtRate } from '@/hooks/use-gdt-rate';
+import { cambodiaToday } from '@/lib/cambodia-date';
 import Link from 'next/link';
 import { workflowLabel } from '@/lib/workflow-labels';
 import { dashboardUsdRow, usdValue } from '@/lib/dashboard-currency';
@@ -211,7 +213,6 @@ export function DashboardContent() {
   const [rawTransactions, setTransactions] = useState<DashboardTransaction[]>(
     [],
   );
-  const [rateOverride, setRateOverride] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [missingDocuments, setMissingDocuments] = useState(0);
@@ -287,11 +288,12 @@ export function DashboardContent() {
     };
   }, []);
 
-  const inferredRate =
-    rawTransactions.find(
-      (row) => row.currency === 'USD' && Number(row.exchangeRate) > 0,
-    )?.exchangeRate || '';
-  const displayRate = rateOverride ?? inferredRate;
+  const monthEndDate = new Date(period + '-01T00:00:00Z');
+  monthEndDate.setUTCMonth(monthEndDate.getUTCMonth() + 1, 0);
+  const monthEnd = monthEndDate.toISOString().slice(0, 10);
+  const rateDate = monthEnd < cambodiaToday() ? monthEnd : cambodiaToday();
+  const officialRate = useGdtRate(rateDate);
+  const displayRate = officialRate.quote?.rate || '';
   const khrPerUsd = Number(displayRate);
   const transactions = useMemo(
     () => rawTransactions.map((row) => dashboardUsdRow(row, khrPerUsd)),
@@ -534,16 +536,27 @@ export function DashboardContent() {
             min="0.01"
             step="0.01"
             value={displayRate}
-            placeholder="Enter conversion rate"
-            onChange={(event) => setRateOverride(event.target.value)}
+            placeholder="GDT rate"
+            readOnly
           />
+          <a
+            className="underline"
+            target="_blank"
+            rel="noreferrer"
+            href={
+              officialRate.quote?.sourceUrl ||
+              'https://www.tax.gov.kh/en/exchange-rate'
+            }
+          >
+            GDT · {officialRate.quote?.date || rateDate}
+          </a>
         </label>
       ) : null}
       {needsKhrConversion && (!Number.isFinite(khrPerUsd) || khrPerUsd <= 0) ? (
         <p role="alert" className="text-amber-700">
           {workflowLabel(
             lang,
-            'Enter a KHR per USD rate to include KHR transactions and budgets in USD totals.',
+            'The GDT rate is unavailable. KHR transactions and budgets are excluded from USD totals until it loads.',
           )}
         </p>
       ) : null}

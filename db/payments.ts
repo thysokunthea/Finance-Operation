@@ -1,5 +1,6 @@
 import { authorize, type ChatGPTUser } from '@/app/chatgpt-auth';
-import { executeBatch } from './neon';
+import { executeBatch, query } from './neon';
+import { getGdtRate, type GdtQuote } from '@/lib/gdt-exchange-rates';
 import { listTransactionRecords } from './transaction-register';
 import { isoDate, minor } from '@/lib/finance';
 
@@ -30,7 +31,25 @@ export async function recordPayment(
     amount <= 0
   )
     throw new Error('Enter a positive amount, method and payment reference.');
-  const rate = record.currency === 'KHR' ? 1 : Number(input.exchangeRate);
+  const original = (
+    await query<{ rate: string; source: string | null }>(
+      'SELECT exchange_rate AS rate,exchange_rate_source_json AS source FROM transaction_payments WHERE id=$1 AND organization_id=$2 AND transaction_id=$3',
+      [input.idempotencyKey, org, record.id],
+    )
+  )[0];
+  const quote: GdtQuote | undefined =
+    record.currency === 'USD'
+      ? original
+        ? original.source
+          ? JSON.parse(original.source)
+          : undefined
+        : await getGdtRate(date)
+      : undefined;
+  const rate = original
+    ? Number(original.rate)
+    : record.currency === 'KHR'
+      ? 1
+      : Number(quote?.rate);
   if (!Number.isFinite(rate) || rate <= 0)
     throw new Error('A positive KHR exchange rate is required.');
   await executeBatch(
@@ -63,8 +82,8 @@ export async function recordPayment(
         parameters: [record.id, org, input.idempotencyKey, amount],
       },
       {
-        text: `INSERT INTO transaction_payments(id, organization_id, transaction_id, payment_date, amount_minor, exchange_rate, method, reference, recorded_by)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO NOTHING`,
+        text: `INSERT INTO transaction_payments(id, organization_id, transaction_id, payment_date, amount_minor, exchange_rate, method, reference, recorded_by,exchange_rate_source_json)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(id) DO NOTHING`,
         parameters: [
           input.idempotencyKey,
           org,
@@ -75,6 +94,7 @@ export async function recordPayment(
           input.method.trim(),
           input.reference.trim(),
           user.userId,
+          quote ? JSON.stringify(quote) : null,
         ],
       },
       {
@@ -89,7 +109,12 @@ export async function recordPayment(
           input.idempotencyKey,
           org,
           record.id,
-          JSON.stringify({ ...input, actor: user.userId }),
+          JSON.stringify({
+            ...input,
+            exchangeRate: rate,
+            exchangeRateSource: quote,
+            actor: user.userId,
+          }),
         ],
       },
     ],
