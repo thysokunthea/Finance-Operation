@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- Clicking an addon only focuses the native input, which already has keyboard access. */
+
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 

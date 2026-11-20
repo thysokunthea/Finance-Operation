@@ -1,11 +1,12 @@
 'use client';
+import { workflowLabel } from '@/lib/workflow-labels';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { RequestWorkspace } from './workflow-forms';
 import {
   Bot,
   CheckCircle2,
   ClipboardCheck,
-  DollarSign,
   Save,
   Send,
   ShieldCheck,
@@ -24,7 +25,15 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
 import { useLanguage } from '@/lib/i18n';
-import { accountLabels, departmentLabels, gdtFilingLabels, journalLabels, recordLanguageLabels, statusLabels, taxpayerClassLabels, translateEnum, type Lang } from '@/lib/translations';
+import {
+  accountLabels,
+  departmentLabels,
+  gdtFilingLabels,
+  journalLabels,
+  recordLanguageLabels,
+  taxpayerClassLabels,
+  translateEnum,
+} from '@/lib/translations';
 import { journalTypes, type JournalType } from '@/lib/chart-of-accounts';
 
 type Kind =
@@ -36,10 +45,21 @@ type Kind =
   | 'accounting'
   | 'settings';
 
-type PaymentRequestItem = { id: string; title: string; category: string; amount: number; currency: string; status: string };
-type BudgetLine = { department: string; monthlyLimit: number; actual: number; currency: string; utilization: number };
-type AccountLine = { category: string; type: string; total: number; count: number };
+type BudgetLine = {
+  department: string;
+  monthlyLimit: number;
+  actual: number;
+  currency: string;
+  utilization: number;
+};
+type AccountLine = {
+  category: string;
+  type: string;
+  total: number;
+  count: number;
+};
 type ApprovalItem = {
+  currency: string;
   id: string;
   name: string;
   owner: string;
@@ -63,7 +83,7 @@ type ComplianceState = {
   reviewedAt?: string;
 };
 export function ExtendedModuleContent({ kind }: { kind: Kind }) {
-  if (kind === 'requests') return <Requests />;
+  if (kind === 'requests') return <RequestWorkspace />;
   if (kind === 'budgets') return <Budgets />;
   if (kind === 'approvals') return <Approvals />;
   if (kind === 'closing') return <Closing />;
@@ -73,84 +93,12 @@ export function ExtendedModuleContent({ kind }: { kind: Kind }) {
 }
 
 function money(value: number, compact = false) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: compact ? 'compact' : 'standard', maximumFractionDigits: compact ? 1 : 2 }).format(value);
-}
-
-function Requests() {
-  const { t } = useLanguage();
-  const [items, setItems] = useState<PaymentRequestItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [notice, setNotice] = useState('');
-  const [creating, setCreating] = useState(false);
-
-  const load = () => {
-    setLoading(true);
-    fetch('/api/payment-requests', { cache: 'no-store' })
-      .then(async (response) => {
-        const payload = (await response.json()) as { requests?: PaymentRequestItem[]; error?: string };
-        if (!response.ok) throw new Error(payload.error || t('req.loadFailed'));
-        setItems(payload.requests || []);
-      })
-      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : t('req.loadFailed')))
-      .finally(() => setLoading(false));
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(load, []);
-
-  const createRequest = async () => {
-    setCreating(true);
-    try {
-      const response = await fetch('/api/payment-requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'New expense request', category: 'Operations', amount: 0.01 }),
-      });
-      const payload = (await response.json()) as { requests?: PaymentRequestItem[]; error?: string };
-      if (!response.ok) throw new Error(payload.error || t('req.createFailed'));
-      setItems(payload.requests || []);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : t('req.createFailed'));
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const pendingValue = items.filter((item) => item.status !== 'Approved').reduce((sum, item) => sum + item.amount, 0);
-  const onTime = items.length ? Math.round((items.filter((item) => item.status === 'Approved').length / items.length) * 100) : 100;
-
-  return (
-    <div className="space-y-5">
-      <Header
-        crumb={`${t('tx.breadcrumbFinance')} / ${t('nav.requests')}`}
-        title={t('req.title')}
-        copy={t('req.copy')}
-        action={<Button onClick={createRequest} disabled={creating}>{creating ? t('req.creating') : t('req.newRequest')}</Button>}
-      />
-      {notice ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{notice}</div> : null}
-      <Metrics
-        values={[
-          [loading ? '…' : money(pendingValue, true), t('req.pendingValue')],
-          [loading ? '…' : String(items.length), t('req.requestsInQueue')],
-          [loading ? '…' : `${onTime}%`, t('req.approvedSoFar')],
-        ]}
-      />
-      <ListCard
-        title={t('req.queueTitle')}
-        description={t('req.queueDesc')}
-      >
-        {items.map((item) => (
-          <Row
-            key={item.id}
-            title={item.title}
-            subtitle={`${item.id} · ${item.category}`}
-            value={money(item.amount)}
-            status={item.status}
-          />
-        ))}
-        {!loading && items.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">{t('req.noneYet')}</div> : null}
-      </ListCard>
-    </div>
-  );
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'KHR',
+    notation: compact ? 'compact' : 'standard',
+    maximumFractionDigits: compact ? 1 : 2,
+  }).format(value);
 }
 
 function Budgets() {
@@ -160,21 +108,29 @@ function Budgets() {
   const [notice, setNotice] = useState('');
   const [department, setDepartment] = useState('');
   const [limit, setLimit] = useState('');
+  const [budgetCurrency, setBudgetCurrency] = useState('KHR');
   const [saving, setSaving] = useState(false);
 
-  const load = () => {
-    setLoading(true);
+  const load = useCallback(() => {
     fetch('/api/budgets', { cache: 'no-store' })
       .then(async (response) => {
-        const payload = (await response.json()) as { budgets?: BudgetLine[]; error?: string };
-        if (!response.ok) throw new Error(payload.error || t('budgets2.loadFailed'));
+        const payload = (await response.json()) as {
+          budgets?: BudgetLine[];
+          error?: string;
+        };
+        if (!response.ok)
+          throw new Error(payload.error || t('budgets2.loadFailed'));
         setLines(payload.budgets || []);
       })
-      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : t('budgets2.loadFailed')))
+      .catch((error: unknown) =>
+        setNotice(
+          error instanceof Error ? error.message : t('budgets2.loadFailed'),
+        ),
+      )
       .finally(() => setLoading(false));
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(load, []);
+  }, [t]);
+
+  useEffect(load, [load]);
 
   const addBudget = async () => {
     setSaving(true);
@@ -182,22 +138,36 @@ function Budgets() {
       const response = await fetch('/api/budgets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ department, monthlyLimit: Number(limit) }),
+        body: JSON.stringify({
+          department,
+          monthlyLimit: Number(limit),
+          currency: budgetCurrency,
+        }),
       });
-      const payload = (await response.json()) as { budgets?: BudgetLine[]; error?: string };
-      if (!response.ok) throw new Error(payload.error || t('budgets2.saveFailed'));
+      const payload = (await response.json()) as {
+        budgets?: BudgetLine[];
+        error?: string;
+      };
+      if (!response.ok)
+        throw new Error(payload.error || t('budgets2.saveFailed'));
       setLines(payload.budgets || []);
       setDepartment('');
       setLimit('');
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : t('budgets2.saveFailed'));
+      setNotice(
+        error instanceof Error ? error.message : t('budgets2.saveFailed'),
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const totalBudget = lines.reduce((sum, line) => sum + line.monthlyLimit, 0);
-  const totalActual = lines.reduce((sum, line) => sum + line.actual, 0);
+  const totalBudget = lines
+    .filter((line) => line.currency === budgetCurrency)
+    .reduce((sum, line) => sum + line.monthlyLimit, 0);
+  const totalActual = lines
+    .filter((line) => line.currency === budgetCurrency)
+    .reduce((sum, line) => sum + line.actual, 0);
 
   return (
     <div className="space-y-5">
@@ -206,19 +176,80 @@ function Budgets() {
         title={t('budget.title')}
         copy={t('budgets2.copy')}
       />
-      {notice ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{notice}</div> : null}
+      {notice ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {notice}
+        </div>
+      ) : null}
       <Metrics
         values={[
-          [loading ? '…' : money(totalBudget, true), t('budgets2.monthlyBudget')],
-          [loading ? '…' : money(totalActual, true), t('budgets2.actualSpending')],
-          [loading ? '…' : money(Math.max(0, totalBudget - totalActual), true), t('budget.remaining')],
+          [
+            loading
+              ? '…'
+              : new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: budgetCurrency,
+                }).format(totalBudget),
+            t('budgets2.monthlyBudget'),
+          ],
+          [
+            loading
+              ? '…'
+              : new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: budgetCurrency,
+                }).format(totalActual),
+            t('budgets2.actualSpending'),
+          ],
+          [
+            loading
+              ? '…'
+              : new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: budgetCurrency,
+                }).format(Math.max(0, totalBudget - totalActual)),
+            t('budget.remaining'),
+          ],
         ]}
       />
       <Card>
         <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-end">
-          <label className="flex-1 text-xs font-medium">{t('tx.department')}<Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder={t('budgets2.departmentPlaceholder')} className="mt-2" /></label>
-          <label className="w-40 text-xs font-medium">{t('budgets2.monthlyLimitUsd')}<Input value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" placeholder="0" className="mt-2" /></label>
-          <Button onClick={addBudget} disabled={saving || !department || !limit}>{saving ? t('tx.saving') : t('budgets2.setBudget')}</Button>
+          <label className="flex-1 text-xs font-medium">
+            {t('tx.department')}
+            <Input
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              placeholder={t('budgets2.departmentPlaceholder')}
+              className="mt-2"
+            />
+          </label>
+          <label className="w-40 text-xs font-medium">
+            {t('budgets2.monthlyBudget')} ({budgetCurrency})
+            <Input
+              value={limit}
+              onChange={(e) => setLimit(e.target.value)}
+              inputMode="numeric"
+              placeholder="0"
+              className="mt-2"
+            />
+          </label>
+          <label className="text-xs">
+            Currency
+            <select
+              value={budgetCurrency}
+              onChange={(e) => setBudgetCurrency(e.target.value)}
+              className="ml-2 rounded border p-2"
+            >
+              <option>KHR</option>
+              <option>USD</option>
+            </select>
+          </label>
+          <Button
+            onClick={addBudget}
+            disabled={saving || !department || !limit}
+          >
+            {saving ? t('tx.saving') : t('budgets2.setBudget')}
+          </Button>
         </CardContent>
       </Card>
       <ListCard
@@ -232,10 +263,25 @@ function Budgets() {
           >
             <div>
               <p className="text-sm font-medium">{line.department}</p>
-              <Progress value={Math.min(100, line.utilization)} className="mt-2 h-1.5" />
+              <Progress
+                value={Math.min(100, line.utilization)}
+                className="mt-2 h-1.5"
+              />
             </div>
-            <Value label={t('nav.budgets')} value={money(line.monthlyLimit)} />
-            <Value label={t('budget.actual')} value={money(line.actual)} />
+            <Value
+              label={t('nav.budgets')}
+              value={new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: line.currency,
+              }).format(line.monthlyLimit)}
+            />
+            <Value
+              label={t('budget.actual')}
+              value={new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: line.currency,
+              }).format(line.actual)}
+            />
             <Value label={t('budget.committed')} value={money(0)} />
             <Badge
               variant="outline"
@@ -251,13 +297,20 @@ function Budgets() {
             </Badge>
           </div>
         ))}
-        {!loading && lines.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">{t('budgets2.noneYet')}</div> : null}
+        {!loading && lines.length === 0 ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">
+            {t('budgets2.noneYet')}
+          </div>
+        ) : null}
       </ListCard>
     </div>
   );
 }
 
 type JournalTransaction = {
+  approval?: string;
+  reportingAmount?: number | null;
+  missingExchangeRate?: boolean;
   id: string;
   date: string;
   type: string;
@@ -279,35 +332,78 @@ function Accounting() {
   useEffect(() => {
     fetch('/api/transactions', { cache: 'no-store' })
       .then(async (response) => {
-        const payload = (await response.json()) as { transactions?: JournalTransaction[]; error?: string };
-        if (!response.ok) throw new Error(payload.error || t('acct.loadFailed'));
-        setTransactions(payload.transactions || []);
+        const payload = (await response.json()) as {
+          transactions?: JournalTransaction[];
+          error?: string;
+        };
+        if (!response.ok)
+          throw new Error(payload.error || t('acct.loadFailed'));
+        if (
+          (payload.transactions || []).some(
+            (row) => row.reportingAmount === null,
+          )
+        )
+          setNotice(
+            workflowLabel(
+              lang,
+              'Records missing exchange rates are excluded from totals. Update them first.',
+            ),
+          );
+        setTransactions(
+          (payload.transactions || [])
+            .filter((row) => row.approval?.toLowerCase() === 'approved')
+            .map((row) => ({
+              ...row,
+              amount: String(row.reportingAmount ?? 0),
+            })),
+        );
       })
-      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : t('acct.loadFailed')))
+      .catch((error: unknown) =>
+        setNotice(
+          error instanceof Error ? error.message : t('acct.loadFailed'),
+        ),
+      )
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [t, lang]);
 
   const lines = useMemo(() => {
     const grouped = new Map<string, AccountLine>();
     for (const transaction of transactions) {
       const key = `${transaction.type}::${transaction.category}`;
-      const existing = grouped.get(key) || { category: transaction.category, type: transaction.type, total: 0, count: 0 };
-      existing.total += Number(transaction.amount) || 0;
+      const existing = grouped.get(key) || {
+        category: transaction.category,
+        type: transaction.type,
+        total: 0,
+        count: 0,
+      };
+      existing.total +=
+        Number(transaction.amount.replace(/[^0-9.-]/g, '')) || 0;
       existing.count += 1;
       grouped.set(key, existing);
     }
     return [...grouped.values()].sort((a, b) => b.total - a.total);
   }, [transactions]);
 
-  const totalIncome = lines.filter((line) => line.type === 'Income').reduce((sum, line) => sum + line.total, 0);
-  const totalExpense = lines.filter((line) => line.type === 'Expense').reduce((sum, line) => sum + line.total, 0);
+  const totalIncome = lines
+    .filter((line) => line.type === 'Income')
+    .reduce((sum, line) => sum + line.total, 0);
+  const totalExpense = lines
+    .filter((line) => line.type === 'Expense')
+    .reduce((sum, line) => sum + line.total, 0);
 
   const journalRows = useMemo(
-    () => (tab === 'summary' ? [] : transactions.filter((transaction) => (transaction.journalType || 'general') === tab)),
+    () =>
+      tab === 'summary'
+        ? []
+        : transactions.filter(
+            (transaction) => (transaction.journalType || 'general') === tab,
+          ),
     [transactions, tab],
   );
-  const journalTotal = journalRows.reduce((sum, row) => sum + (Number(row.amount.replace(/[^0-9.-]/g, '')) || 0), 0);
+  const journalTotal = journalRows.reduce(
+    (sum, row) => sum + (Number(row.amount.replace(/[^0-9.-]/g, '')) || 0),
+    0,
+  );
 
   return (
     <div className="space-y-5">
@@ -316,11 +412,21 @@ function Accounting() {
         title={t('journals.title')}
         copy={t('journals.copy')}
       />
-      {notice ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{notice}</div> : null}
+      {notice ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {notice}
+        </div>
+      ) : null}
       <div className="flex flex-wrap gap-1 rounded-xl border bg-muted/30 p-1">
-        <TabButton active={tab === 'summary'} onClick={() => setTab('summary')}>{t('journals.tabSummary')}</TabButton>
+        <TabButton active={tab === 'summary'} onClick={() => setTab('summary')}>
+          {t('journals.tabSummary')}
+        </TabButton>
         {journalTypes.map((journalType) => (
-          <TabButton key={journalType} active={tab === journalType} onClick={() => setTab(journalType)}>
+          <TabButton
+            key={journalType}
+            active={tab === journalType}
+            onClick={() => setTab(journalType)}
+          >
             {translateEnum(journalLabels, lang, journalType)}
           </TabButton>
         ))}
@@ -330,8 +436,14 @@ function Accounting() {
           <Metrics
             values={[
               [loading ? '…' : money(totalIncome, true), t('acct.totalIncome')],
-              [loading ? '…' : money(totalExpense, true), t('acct.totalExpense')],
-              [loading ? '…' : money(totalIncome - totalExpense, true), t('acct.netPosition')],
+              [
+                loading ? '…' : money(totalExpense, true),
+                t('acct.totalExpense'),
+              ],
+              [
+                loading ? '…' : money(totalIncome - totalExpense, true),
+                t('acct.netPosition'),
+              ],
             ]}
           />
           <ListCard
@@ -349,12 +461,23 @@ function Accounting() {
                 </div>
                 <Value label={t('acct.total')} value={money(line.total)} />
                 <Value label={t('acct.entries')} value={String(line.count)} />
-                <Badge variant="outline" className={line.type === 'Income' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-700'}>
+                <Badge
+                  variant="outline"
+                  className={
+                    line.type === 'Income'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                      : 'border-slate-200 bg-slate-50 text-slate-700'
+                  }
+                >
                   {line.type}
                 </Badge>
               </div>
             ))}
-            {!loading && lines.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">{t('acct.noneYet')}</div> : null}
+            {!loading && lines.length === 0 ? (
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                {t('acct.noneYet')}
+              </div>
+            ) : null}
           </ListCard>
         </>
       ) : (
@@ -370,15 +493,25 @@ function Accounting() {
               <span className="text-xs text-muted-foreground">{row.date}</span>
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{row.party}</p>
-                <p className="truncate text-xs text-muted-foreground">{row.reference}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {row.reference}
+                </p>
               </div>
               <p className="truncate text-xs text-muted-foreground">
-                {row.accountCode ? `${row.accountCode} — ${translateEnum(accountLabels, lang, row.accountCode)}` : '—'}
+                {row.accountCode
+                  ? `${row.accountCode} — ${translateEnum(accountLabels, lang, row.accountCode)}`
+                  : '—'}
               </p>
-              <p className="text-right font-mono text-sm font-semibold">{row.amount}</p>
+              <p className="text-right font-mono text-sm font-semibold">
+                {money(Number(row.amount))}
+              </p>
             </div>
           ))}
-          {!loading && journalRows.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">{t('journals.noneYet')}</div> : null}
+          {!loading && journalRows.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              {t('journals.noneYet')}
+            </div>
+          ) : null}
           {journalRows.length > 0 ? (
             <div className="flex items-center justify-between border-t bg-muted/20 p-4 text-sm font-semibold">
               <span>{t('acct.total')}</span>
@@ -391,7 +524,15 @@ function Accounting() {
   );
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
@@ -427,7 +568,9 @@ function Approvals() {
       })
       .catch((error: unknown) => {
         if (active) {
-          setNotice(error instanceof Error ? error.message : t('appr.loadFailed'));
+          setNotice(
+            error instanceof Error ? error.message : t('appr.loadFailed'),
+          );
           setNoticeIsError(true);
         }
       })
@@ -437,9 +580,8 @@ function Approvals() {
     return () => {
       active = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const approve = async (id: string) => {
+  }, [t]);
+  const approve = async (id: string, action = 'approve', reason = '') => {
     if (busyId) return;
     setBusyId(id);
     setNotice(t('appr.savingApproval'));
@@ -448,7 +590,7 @@ function Approvals() {
       const response = await fetch('/api/approvals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactionId: id, action: 'approve' }),
+        body: JSON.stringify({ transactionId: id, action, reason }),
       });
       const payload = (await response.json()) as {
         approval?: ApprovalItem;
@@ -457,7 +599,11 @@ function Approvals() {
       if (!response.ok || !payload.approval)
         throw new Error(payload.error || t('appr.saveFailed'));
       setItems((current) => current.filter((item) => item.id !== id));
-      setNotice(t('appr.approvedNotice', { id }));
+      setNotice(
+        action === 'reject'
+          ? workflowLabel(lang, 'Reject') + ': ' + id
+          : t('appr.approvedNotice', { id }),
+      );
       setNoticeIsError(false);
       window.dispatchEvent(new Event('ledgerflow-approvals-changed'));
     } catch (error) {
@@ -467,16 +613,18 @@ function Approvals() {
       setBusyId('');
     }
   };
-  const pendingValue = items.reduce(
-    (sum, item) => sum + Number(item.amount.replace(/[^0-9.-]/g, '') || 0),
-    0,
-  );
-  const valueLabel = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(pendingValue);
+  const valueLabel = ['KHR', 'USD']
+    .map((currency) =>
+      new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(
+        items
+          .filter((item) => item.currency === currency)
+          .reduce(
+            (sum, item) => sum + Number(item.amount.replace(/[^0-9.-]/g, '')),
+            0,
+          ),
+      ),
+    )
+    .join(' / ');
   return (
     <div className="space-y-5">
       <Header
@@ -486,7 +634,8 @@ function Approvals() {
       />
       {notice ? (
         <div
-          role="status"
+          aria-live="polite"
+
           className={`rounded-xl border px-4 py-3 text-sm ${noticeIsError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
         >
           {notice}
@@ -499,10 +648,7 @@ function Approvals() {
           [t('appr.audited'), t('appr.decisionRecord')],
         ]}
       />
-      <ListCard
-        title={t('appr.itemsTitle')}
-        description={t('appr.itemsDesc')}
-      >
+      <ListCard title={t('appr.itemsTitle')} description={t('appr.itemsDesc')}>
         {items.map((item) => (
           <div
             key={item.id}
@@ -515,11 +661,14 @@ function Approvals() {
               <p className="text-sm font-medium">{item.name}</p>
               <p className="text-xs text-muted-foreground">
                 {item.id}
-                {item.reference ? ` · ${item.reference}` : ''} · {t('appr.submittedBy')}{' '}
-                {item.owner}
+                {item.reference ? ` · ${item.reference}` : ''} ·{' '}
+                {t('appr.submittedBy')} {item.owner}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {item.department ? translateEnum(departmentLabels, lang, item.department) : t('appr.noDepartment')} · {item.date}
+                {item.department
+                  ? translateEnum(departmentLabels, lang, item.department)
+                  : t('appr.noDepartment')}{' '}
+                · {item.date}
               </p>
             </div>
             <p className="font-mono text-sm font-semibold">{item.amount}</p>
@@ -529,6 +678,18 @@ function Approvals() {
               onClick={() => approve(item.id)}
             >
               {busyId === item.id ? t('appr.approving') : t('appr.approve')}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!!busyId}
+              onClick={() => {
+                const reason = window.prompt(
+                  workflowLabel(lang, 'Reason for rejection'),
+                );
+                if (reason?.trim()) void approve(item.id, 'reject', reason);
+              }}
+            >
+              {workflowLabel(lang, 'Reject')}
             </Button>
           </div>
         ))}
@@ -553,12 +714,15 @@ function Approvals() {
   );
 }
 
-function currentPeriodLabel(lang: Lang) {
-  return new Date().toLocaleDateString(lang === 'km' ? 'km-KH' : 'en-US', { month: 'long', year: 'numeric' });
-}
-
 function Closing() {
   const { t, lang } = useLanguage();
+  const [period, setPeriod] = useState(() =>
+    new Date()
+      .toLocaleDateString('en-CA', { timeZone: 'Asia/Phnom_Penh' })
+      .slice(0, 7),
+  );
+  const [closed, setClosed] = useState(false);
+  const [reason, setReason] = useState('');
   const [tasks, setTasks] = useState<string[]>([]);
   const [status, setStatus] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -566,20 +730,32 @@ function Closing() {
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
-    fetch('/api/closing', { cache: 'no-store' })
+    fetch('/api/closing?period=' + period, { cache: 'no-store' })
       .then(async (response) => {
-        const payload = (await response.json()) as { tasks?: string[]; status?: Record<string, boolean>; error?: string };
-        if (!response.ok) throw new Error(payload.error || t('close.loadFailed'));
+        const payload = (await response.json()) as {
+          tasks?: string[];
+          closed?: boolean;
+          status?: Record<string, boolean>;
+          error?: string;
+        };
+        if (!response.ok)
+          throw new Error(payload.error || t('close.loadFailed'));
         setTasks(payload.tasks || []);
+        setClosed(!!payload.closed);
         setStatus(payload.status || {});
       })
-      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : t('close.loadFailed')))
+      .catch((error: unknown) =>
+        setNotice(
+          error instanceof Error ? error.message : t('close.loadFailed'),
+        ),
+      )
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [period, t]);
 
   const doneCount = tasks.filter((name) => status[name]).length;
-  const progress = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
+  const progress = tasks.length
+    ? Math.round((doneCount / tasks.length) * 100)
+    : 0;
 
   const toggle = async (name: string) => {
     setBusy(name);
@@ -588,9 +764,12 @@ function Closing() {
       const response = await fetch('/api/closing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskName: name, completed: next }),
+        body: JSON.stringify({ period, taskName: name, completed: next }),
       });
-      const payload = (await response.json()) as { status?: Record<string, boolean>; error?: string };
+      const payload = (await response.json()) as {
+        status?: Record<string, boolean>;
+        error?: string;
+      };
       if (!response.ok) throw new Error(payload.error || t('close.saveFailed'));
       setStatus(payload.status || {});
     } catch (error) {
@@ -604,23 +783,86 @@ function Closing() {
     <div className="space-y-5">
       <Header
         crumb={`${t('section.workflow')} / ${t('nav.closing')}`}
-        title={t('close.periodClose', { period: currentPeriodLabel(lang) })}
+        title={t('close.periodClose', { period })}
         copy={t('close.copy')}
         action={
           <Badge
             variant="outline"
-            className={progress === 100 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}
+            className={
+              progress === 100
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border-amber-200 bg-amber-50 text-amber-700'
+            }
           >
             {progress === 100 ? t('close.complete') : t('tasks.inProgress')}
           </Badge>
         }
       />
-      {notice ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{notice}</div> : null}
+      {notice ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {notice}
+        </div>
+      ) : null}
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+        <label className="text-sm">
+          {workflowLabel(lang, 'Period')}
+          <Input
+            type="month"
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+          />
+        </label>
+        <label className="min-w-48 flex-1 text-sm">
+          {workflowLabel(lang, 'Reason to close / reopen')}
+          <Input value={reason} onChange={(e) => setReason(e.target.value)} />
+        </label>
+        <Button
+          disabled={!!busy || !reason.trim()}
+          onClick={async () => {
+            setBusy('period');
+            setNotice('');
+            try {
+              const r = await fetch('/api/closing', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  period,
+                  action: closed ? 'reopen' : 'close',
+                  reason,
+                }),
+              });
+              const p = await r.json();
+              if (!r.ok) throw new Error(p.error);
+              setClosed(!!p.closed);
+              setReason('');
+            } catch (e) {
+              setNotice(e instanceof Error ? e.message : 'Failed.');
+            } finally {
+              setBusy('');
+            }
+          }}
+        >
+          {closed
+            ? workflowLabel(lang, 'Reopen period')
+            : workflowLabel(lang, 'Close & lock period')}
+        </Button>
+        <Badge variant="outline">
+          {closed ? workflowLabel(lang, 'Locked') : workflowLabel(lang, 'Open')}
+        </Badge>
+      </div>
       <Card>
         <CardContent className="p-5">
           <div className="flex justify-between text-sm">
             <span className="font-medium">{t('close.progressLabel')}</span>
-            <span>{loading ? '…' : t('close.progressDetail', { percent: progress, done: doneCount, total: tasks.length })}</span>
+            <span>
+              {loading
+                ? '…'
+                : t('close.progressDetail', {
+                    percent: progress,
+                    done: doneCount,
+                    total: tasks.length,
+                  })}
+            </span>
           </div>
           <Progress value={progress} className="mt-3" />
         </CardContent>
@@ -631,7 +873,7 @@ function Closing() {
           return (
             <button
               key={name}
-              disabled={busy === name}
+              disabled={!!busy || closed}
               onClick={() => toggle(name)}
               className="flex items-center gap-3 rounded-xl border bg-card p-4 text-left transition hover:border-primary/40 disabled:opacity-60"
             >
@@ -656,67 +898,184 @@ function Closing() {
   );
 }
 
-type AssistantTransaction = { type: string; party: string; department: string; amount: string; status: string; dueDate?: string; date: string };
+type AssistantTransaction = {
+  approval?: string;
+  balance?: number;
+  reportingAmount?: number | null;
+  type: string;
+  party: string;
+  department: string;
+  amount: string;
+  status: string;
+  dueDate?: string;
+  date: string;
+};
 
 function amountValue(value: string) {
   const parsed = Number(value.replace(/[^0-9.-]/g, ''));
   return Number.isFinite(parsed) ? parsed : 0;
 }
 function assistantMoney(value: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'KHR',
+  }).format(value);
 }
 function parseAssistantDate(value?: string): Date | null {
   if (!value) return null;
   const match = value.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
   if (match) {
-    const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(match[2]);
+    const month = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ].indexOf(match[2]);
     if (month >= 0) return new Date(Number(match[3]), month, Number(match[1]));
   }
   const parsed = new Date(value);
   return Number.isFinite(parsed.getTime()) ? parsed : null;
 }
 
-function answerFromData(question: string, rows: AssistantTransaction[], budgets: BudgetLine[], t: (key: string, vars?: Record<string, string | number>) => string): string {
+function answerFromData(
+  question: string,
+  rows: AssistantTransaction[],
+  budgets: BudgetLine[],
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
   const q = question.toLowerCase();
   const today = new Date(new Date().toDateString());
 
-  if (q.includes('overdue') && (q.includes('customer') || q.includes('invoice') || q.includes('receivable'))) {
-    const overdue = rows.filter((row) => row.type.toLowerCase() === 'income' && row.status.toLowerCase() !== 'paid' && (() => { const due = parseAssistantDate(row.dueDate); return due ? due.getTime() < today.getTime() : row.status.toLowerCase() === 'overdue'; })());
+  if (
+    q.includes('overdue') &&
+    (q.includes('customer') ||
+      q.includes('invoice') ||
+      q.includes('receivable'))
+  ) {
+    const overdue = rows.filter(
+      (row) =>
+        row.approval?.toLowerCase() === 'approved' &&
+        row.type.toLowerCase() === 'income' &&
+        row.status.toLowerCase() !== 'paid' &&
+        (() => {
+          const due = parseAssistantDate(row.dueDate);
+          return due
+            ? due.getTime() < today.getTime()
+            : row.status.toLowerCase() === 'overdue';
+        })(),
+    );
     if (overdue.length === 0) return t('asst.noOverdueInvoices');
-    const total = overdue.reduce((sum, row) => sum + amountValue(row.amount), 0);
-    const list = overdue.slice(0, 5).map((row) => t('asst.owesTemplate', { party: row.party || t('asst.unknown'), amount: assistantMoney(amountValue(row.amount)) })).join('; ');
-    return t('asst.overdueSummary', { count: overdue.length, plural: overdue.length === 1 ? '' : 's', list, total: assistantMoney(total) });
+    const total = overdue.reduce(
+      (sum, row) => sum + amountValue(row.amount),
+      0,
+    );
+    const list = overdue
+      .slice(0, 5)
+      .map((row) =>
+        t('asst.owesTemplate', {
+          party: row.party || t('asst.unknown'),
+          amount: assistantMoney(amountValue(row.amount)),
+        }),
+      )
+      .join('; ');
+    return t('asst.overdueSummary', {
+      count: overdue.length,
+      plural: overdue.length === 1 ? '' : 's',
+      list,
+      total: assistantMoney(total),
+    });
   }
 
-  if (q.includes('over budget') || (q.includes('budget') && q.includes('department'))) {
+  if (
+    q.includes('over budget') ||
+    (q.includes('budget') && q.includes('department'))
+  ) {
     const over = budgets.filter((budget) => budget.utilization >= 100);
     if (budgets.length === 0) return t('asst.noBudgetsConfigured');
     if (over.length === 0) {
-      const top = budgets.slice().sort((a, b) => b.utilization - a.utilization)[0];
-      return t('asst.noneOverBudget', { detail: top ? t('asst.atPercentOfBudget', { department: top.department, percent: top.utilization }) : t('asst.naDetail') });
+      const top = budgets
+        .slice()
+        .sort((a, b) => b.utilization - a.utilization)[0];
+      return t('asst.noneOverBudget', {
+        detail: top
+          ? t('asst.atPercentOfBudget', {
+              department: top.department,
+              percent: top.utilization,
+            })
+          : t('asst.naDetail'),
+      });
     }
-    return `${over.map((budget) => t('asst.overBudgetItem', { department: budget.department, percent: budget.utilization, limit: assistantMoney(budget.monthlyLimit) })).join('; ')}.`;
+    return `${over.map((budget) => t('asst.overBudgetItem', { department: budget.department, percent: budget.utilization, limit: new Intl.NumberFormat('en-US', { style: 'currency', currency: budget.currency }).format(budget.monthlyLimit) })).join('; ')}.`;
   }
 
   if (q.includes('payment') && (q.includes('due') || q.includes('week'))) {
-    const dueSoon = rows.filter((row) => row.type.toLowerCase() === 'expense' && row.status.toLowerCase() !== 'paid' && (() => { const due = parseAssistantDate(row.dueDate); if (!due) return false; const days = (due.getTime() - today.getTime()) / 86400000; return days >= 0 && days <= 7; })());
+    const dueSoon = rows.filter(
+      (row) =>
+        row.type.toLowerCase() === 'expense' &&
+        row.status.toLowerCase() !== 'paid' &&
+        (() => {
+          const due = parseAssistantDate(row.dueDate);
+          if (!due) return false;
+          const days = (due.getTime() - today.getTime()) / 86400000;
+          return days >= 0 && days <= 7;
+        })(),
+    );
     if (dueSoon.length === 0) return t('asst.noSupplierPaymentsDue');
-    const total = dueSoon.reduce((sum, row) => sum + amountValue(row.amount), 0);
-    const list = dueSoon.slice(0, 5).map((row) => `${row.party || t('asst.unknown')} (${assistantMoney(amountValue(row.amount))})`).join('; ');
-    return t('asst.paymentsDueSummary', { count: dueSoon.length, plural: dueSoon.length === 1 ? '' : 's', total: assistantMoney(total), list });
+    const total = dueSoon.reduce(
+      (sum, row) => sum + amountValue(row.amount),
+      0,
+    );
+    const list = dueSoon
+      .slice(0, 5)
+      .map(
+        (row) =>
+          `${row.party || t('asst.unknown')} (${assistantMoney(amountValue(row.amount))})`,
+      )
+      .join('; ');
+    return t('asst.paymentsDueSummary', {
+      count: dueSoon.length,
+      plural: dueSoon.length === 1 ? '' : 's',
+      total: assistantMoney(total),
+      list,
+    });
   }
 
   const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   const monthRows = rows.filter((row) => {
     const date = parseAssistantDate(row.date);
-    return date && `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` === currentMonth;
+    return (
+      row.approval?.toLowerCase() === 'approved' &&
+      date &&
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` ===
+        currentMonth
+    );
   });
-  const revenue = monthRows.filter((row) => row.type.toLowerCase() === 'income').reduce((sum, row) => sum + amountValue(row.amount), 0);
-  const expenses = monthRows.filter((row) => row.type.toLowerCase() === 'expense').reduce((sum, row) => sum + amountValue(row.amount), 0);
-  return t('asst.monthlySummary', { revenue: assistantMoney(revenue), expenses: assistantMoney(expenses), net: assistantMoney(revenue - expenses) });
+  const revenue = monthRows
+    .filter((row) => row.type.toLowerCase() === 'income')
+    .reduce((sum, row) => sum + amountValue(row.amount), 0);
+  const expenses = monthRows
+    .filter((row) => row.type.toLowerCase() === 'expense')
+    .reduce((sum, row) => sum + amountValue(row.amount), 0);
+  return t('asst.monthlySummary', {
+    revenue: assistantMoney(revenue),
+    expenses: assistantMoney(expenses),
+    net: assistantMoney(revenue - expenses),
+  });
 }
 
-type ChatEntry = { role: 'user' | 'assistant'; content: string; source?: 'ai' | 'rules' };
+type ChatEntry = {
+  role: 'user' | 'assistant';
+  content: string;
+  source?: 'ai' | 'rules';
+};
 
 function Assistant() {
   const { t } = useLanguage();
@@ -729,12 +1088,26 @@ function Assistant() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/transactions', { cache: 'no-store' }).then((response) => response.json()),
-      fetch('/api/budgets', { cache: 'no-store' }).then((response) => response.json()),
+      fetch('/api/transactions', { cache: 'no-store' }).then((response) =>
+        response.json(),
+      ),
+      fetch('/api/budgets', { cache: 'no-store' }).then((response) =>
+        response.json(),
+      ),
     ])
       .then(([txPayload, budgetPayload]) => {
-        setRows(txPayload.transactions || []);
+        setRows(
+          (txPayload.transactions || []).map(
+            (
+              row: AssistantTransaction & { reportingAmount?: number | null },
+            ) => ({ ...row, amount: String(row.reportingAmount ?? 0) }),
+          ),
+        );
         setBudgets(budgetPayload.budgets || []);
+      })
+      .catch(() => {
+        setRows([]);
+        setBudgets([]);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -750,16 +1123,41 @@ function Assistant() {
       const response = await fetch('/api/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: nextChat.map((entry) => ({ role: entry.role, content: entry.content })) }),
+        body: JSON.stringify({
+          messages: nextChat.map((entry) => ({
+            role: entry.role,
+            content: entry.content,
+          })),
+        }),
       });
-      const payload = (await response.json()) as { answer?: string; error?: string };
+      const payload = (await response.json()) as {
+        answer?: string;
+        error?: string;
+      };
       if (response.ok && payload.answer) {
-        setChat((current) => [...current, { role: 'assistant', content: payload.answer!, source: 'ai' }]);
+        setChat((current) => [
+          ...current,
+          { role: 'assistant', content: payload.answer!, source: 'ai' },
+        ]);
       } else {
-        setChat((current) => [...current, { role: 'assistant', content: answerFromData(trimmed, rows, budgets, t), source: 'rules' }]);
+        setChat((current) => [
+          ...current,
+          {
+            role: 'assistant',
+            content: answerFromData(trimmed, rows, budgets, t),
+            source: 'rules',
+          },
+        ]);
       }
     } catch {
-      setChat((current) => [...current, { role: 'assistant', content: answerFromData(trimmed, rows, budgets, t), source: 'rules' }]);
+      setChat((current) => [
+        ...current,
+        {
+          role: 'assistant',
+          content: answerFromData(trimmed, rows, budgets, t),
+          source: 'rules',
+        },
+      ]);
     } finally {
       setAsking(false);
     }
@@ -778,7 +1176,13 @@ function Assistant() {
         crumb={`${t('tx.breadcrumbFinance')} / ${t('nav.assistant')}`}
         title={t('asst.title')}
         copy={t('asst.copy')}
-        action={chat.length > 0 ? <Button variant="ghost" size="sm" onClick={() => setChat([])}>{t('asst.clearChat')}</Button> : undefined}
+        action={
+          chat.length > 0 ? (
+            <Button variant="ghost" size="sm" onClick={() => setChat([])}>
+              {t('asst.clearChat')}
+            </Button>
+          ) : undefined
+        }
       />
       <Card>
         <CardHeader>
@@ -788,9 +1192,7 @@ function Assistant() {
             </span>
             <div>
               <CardTitle>{t('asst.askLedgerFlow')}</CardTitle>
-              <CardDescription>
-                {t('asst.readOnly')}
-              </CardDescription>
+              <CardDescription>{t('asst.readOnly')}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -801,20 +1203,28 @@ function Assistant() {
             </div>
           ) : (
             <div className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
-              {chat.map((entry, index) => entry.role === 'user' ? (
-                <div key={index} className="flex justify-end">
-                  <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground">
-                    {entry.content}
+              {chat.map((entry, index) =>
+                entry.role === 'user' ? (
+                  <div key={index} className="flex justify-end">
+                    <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground">
+                      {entry.content}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div key={index} className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm leading-6">
-                  <div className="mb-2 flex items-center gap-2 font-semibold text-primary">
-                    <Sparkles className="size-4" /> {entry.source === 'ai' ? t('asst.aiAnswer') : t('asst.rulesAnswer')}
+                ) : (
+                  <div
+                    key={index}
+                    className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm leading-6"
+                  >
+                    <div className="mb-2 flex items-center gap-2 font-semibold text-primary">
+                      <Sparkles className="size-4" />{' '}
+                      {entry.source === 'ai'
+                        ? t('asst.aiAnswer')
+                        : t('asst.rulesAnswer')}
+                    </div>
+                    <div className="whitespace-pre-wrap">{entry.content}</div>
                   </div>
-                  <div className="whitespace-pre-wrap">{entry.content}</div>
-                </div>
-              ))}
+                ),
+              )}
               {asking ? (
                 <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
                   {t('asst.thinking')}
@@ -871,17 +1281,16 @@ function SettingsPanel() {
           error?: string;
         };
         if (!response.ok || !payload.settings)
-          throw new Error(
-            payload.error || t('settings.loadFailed'),
-          );
+          throw new Error(payload.error || t('settings.loadFailed'));
         setSettings(payload.settings);
       })
       .catch((error: unknown) => {
-        setStatus(error instanceof Error ? error.message : t('settings.loadFailed'));
+        setStatus(
+          error instanceof Error ? error.message : t('settings.loadFailed'),
+        );
         setStatusIsError(true);
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [t]);
   const save = async () => {
     setSaving(true);
     setStatus(t('settings.savingProfile'));
@@ -897,14 +1306,14 @@ function SettingsPanel() {
         error?: string;
       };
       if (!response.ok || !payload.settings)
-        throw new Error(
-          payload.error || t('settings.saveFailed'),
-        );
+        throw new Error(payload.error || t('settings.saveFailed'));
       setSettings(payload.settings);
       setStatus(t('settings.savedProfile'));
       setStatusIsError(false);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : t('settings.saveFailed'));
+      setStatus(
+        error instanceof Error ? error.message : t('settings.saveFailed'),
+      );
       setStatusIsError(true);
     } finally {
       setSaving(false);
@@ -919,7 +1328,8 @@ function SettingsPanel() {
       />
       {status ? (
         <div
-          role="status"
+          aria-live="polite"
+
           className={`rounded-xl border px-4 py-3 text-sm ${statusIsError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
         >
           {status}
@@ -928,9 +1338,7 @@ function SettingsPanel() {
       <Card className="border-primary/20">
         <CardHeader>
           <CardTitle>{t('settings.profileTitle')}</CardTitle>
-          <CardDescription>
-            {t('settings.profileDesc')}
-          </CardDescription>
+          <CardDescription>{t('settings.profileDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className="text-xs font-medium">
@@ -964,7 +1372,9 @@ function SettingsPanel() {
               className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"
             >
               {Object.keys(taxpayerClassLabels.en).map((value) => (
-                <option key={value} value={value}>{translateEnum(taxpayerClassLabels, lang, value)}</option>
+                <option key={value} value={value}>
+                  {translateEnum(taxpayerClassLabels, lang, value)}
+                </option>
               ))}
             </select>
           </label>
@@ -981,7 +1391,9 @@ function SettingsPanel() {
               className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"
             >
               {Object.keys(gdtFilingLabels.en).map((value) => (
-                <option key={value} value={value}>{translateEnum(gdtFilingLabels, lang, value)}</option>
+                <option key={value} value={value}>
+                  {translateEnum(gdtFilingLabels, lang, value)}
+                </option>
               ))}
             </select>
           </label>
@@ -1012,7 +1424,9 @@ function SettingsPanel() {
               className="mt-2 h-9 w-full rounded-lg border bg-card px-3 text-sm"
             >
               {Object.keys(recordLanguageLabels.en).map((value) => (
-                <option key={value} value={value}>{translateEnum(recordLanguageLabels, lang, value)}</option>
+                <option key={value} value={value}>
+                  {translateEnum(recordLanguageLabels, lang, value)}
+                </option>
               ))}
             </select>
           </label>
@@ -1022,7 +1436,11 @@ function SettingsPanel() {
           </label>
           <label className="text-xs font-medium">
             {t('settings.fiscalYear')}
-            <Input value={t('settings.fiscalYearValue')} disabled className="mt-2" />
+            <Input
+              value={t('settings.fiscalYearValue')}
+              disabled
+              className="mt-2"
+            />
           </label>
           <label className="text-xs font-medium">
             {t('settings.retention')}
@@ -1069,9 +1487,7 @@ function SettingsPanel() {
         <Card>
           <CardHeader>
             <CardTitle>{t('settings.budgetAlerts')}</CardTitle>
-            <CardDescription>
-              {t('settings.budgetAlertsDesc')}
-            </CardDescription>
+            <CardDescription>{t('settings.budgetAlertsDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Field label={t('settings.warningThreshold')} value="80" />
@@ -1164,32 +1580,6 @@ function ListCard({
       </CardHeader>
       <CardContent className="p-0">{children}</CardContent>
     </Card>
-  );
-}
-function Row({
-  title,
-  subtitle,
-  value,
-  status,
-}: {
-  title: string;
-  subtitle: string;
-  value: string;
-  status: string;
-}) {
-  const { lang } = useLanguage();
-  return (
-    <div className="flex flex-col gap-3 border-b p-4 last:border-0 sm:flex-row sm:items-center">
-      <span className="grid size-10 place-items-center rounded-xl bg-sky-50 text-sky-600">
-        <DollarSign className="size-5" />
-      </span>
-      <div className="flex-1">
-        <p className="text-sm font-medium">{title}</p>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
-      </div>
-      <p className="font-mono text-sm font-semibold">{value}</p>
-      <Badge variant="outline">{translateEnum(statusLabels, lang, status)}</Badge>
-    </div>
   );
 }
 function Value({ label, value }: { label: string; value: string }) {

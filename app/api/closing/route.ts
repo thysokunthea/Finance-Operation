@@ -1,30 +1,106 @@
-import { getChatGPTUser } from '@/app/chatgpt-auth';
-import { closingChecklist, getClosingStatus, toggleClosingTask } from '@/db/closing';
-
-function currentPeriod() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
+import { changePeriod, isPeriodClosed } from '@/db/periods';
+import { periodKey, validatePeriod } from '@/lib/finance';
+import { getChatGPTUser, authorize } from '@/app/chatgpt-auth';
+import {
+  closingChecklist,
+  getClosingStatus,
+  toggleClosingTask,
+} from '@/db/closing';
 
 export async function GET(request: Request) {
   const user = await getChatGPTUser();
-  if (!user) return Response.json({ error: 'Authentication required.' }, { status: 401 });
-  const period = new URL(request.url).searchParams.get('period') || currentPeriod();
+  if (!user)
+    return Response.json(
+      { error: 'Authentication required.' },
+      { status: 401 },
+    );
+  const period = new URL(request.url).searchParams.get('period') || periodKey();
   try {
-    return Response.json({ period, tasks: closingChecklist, status: await getClosingStatus(period) }, { headers: { 'Cache-Control': 'no-store' } });
+    authorize(user, 'read');
+    validatePeriod(period);
+    return Response.json(
+      {
+        closed: await isPeriodClosed(period, user),
+        period,
+        tasks: closingChecklist,
+        status: await getClosingStatus(period),
+      },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : 'Closing status could not be loaded.' }, { status: 500 });
+    return Response.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Closing status could not be loaded.',
+      },
+      {
+        status:
+          error instanceof Error && error.message.startsWith('Forbidden:')
+            ? 403
+            : 500,
+      },
+    );
   }
 }
 
 export async function POST(request: Request) {
   const user = await getChatGPTUser();
-  if (!user) return Response.json({ error: 'Authentication required.' }, { status: 401 });
+  if (!user)
+    return Response.json(
+      { error: 'Authentication required.' },
+      { status: 401 },
+    );
   try {
-    const body = await request.json() as { period?: string; taskName: string; completed: boolean };
-    const period = body.period || currentPeriod();
-    return Response.json({ period, status: await toggleClosingTask(period, body.taskName, body.completed, user) });
+    authorize(user, 'write');
+    const body = (await request.json()) as {
+      period?: string;
+      taskName: string;
+      completed: boolean;
+      action?: string;
+      reason?: string;
+    };
+    const period = body.period || periodKey();
+    validatePeriod(period);
+    if (body.action) {
+      if (!['close', 'reopen'].includes(body.action))
+        throw new Error('Invalid action.');
+      await changePeriod(
+        period,
+        body.action === 'close',
+        user,
+        body.reason || '',
+      );
+      return Response.json({
+        closed: await isPeriodClosed(period, user),
+        period,
+        status: await getClosingStatus(period),
+      });
+    }
+    return Response.json({
+      period,
+      status: await toggleClosingTask(
+        period,
+        body.taskName,
+        body.completed,
+        user,
+      ),
+    });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : 'Closing task could not be saved.' }, { status: 400 });
+    return Response.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Closing task could not be saved.',
+      },
+      {
+        status:
+          error instanceof Error && error.message.startsWith('Forbidden:')
+            ? 403
+            : 400,
+      },
+    );
   }
 }

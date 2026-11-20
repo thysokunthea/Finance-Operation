@@ -1,6 +1,13 @@
+import { authorize } from '@/app/chatgpt-auth';
+import { isoDate, minor, reportingValue } from '@/lib/finance';
+import { workspaceId, scopedKey } from '@/app/chatgpt-auth';
 import type { ChatGPTUser } from '@/app/chatgpt-auth';
 import { executeBatch, query } from '@/db/neon';
-import { classifyJournal, getAccount, suggestAccount } from '@/lib/chart-of-accounts';
+import {
+  classifyJournal,
+  getAccount,
+  suggestAccount,
+} from '@/lib/chart-of-accounts';
 
 export type TransactionRecord = {
   id: string;
@@ -27,50 +34,97 @@ export type TransactionRecord = {
   journalType?: string;
   accountCode?: string;
   accountName?: string;
+  reportingAmount?: number | null;
+  paidAmount?: number;
+  balance?: number;
+  version?: number;
+  documentIds?: string[];
+  cashReportingAmount?: number;
+  payments?: Array<{ date: string; amount: number; reportingAmount: number }>;
+  missingExchangeRate?: boolean;
 };
 
-const organizationId = 'ledgerflow-org';
-
 export async function listTransactionRecords(): Promise<TransactionRecord[]> {
+  const organizationId = await workspaceId();
   const result = await query<{
-      id: string;
-      date: string;
-      type: string;
-      reference: string;
-      party: string;
-      department: string;
-      totalminor: number | string;
-      status: string;
-      approval: string;
-      owner: string;
-      duedate: string | null;
-      currency: string;
-      subtotalminor: number | string;
-      taxminor: number | string;
-      description: string;
-      payloadjson: string | null;
-    }>(`
+    id: string;
+    date: string;
+    type: string;
+    reference: string;
+    party: string;
+    department: string;
+    totalminor: number | string;
+    status: string;
+    approval: string;
+    owner: string;
+    duedate: string | null;
+    currency: string;
+    subtotalminor: number | string;
+    taxminor: number | string;
+    description: string;
+    payloadjson: string | null;
+    version: number;
+    paidminor: string;
+    paymentsjson: string;
+  }>(
+    `
     SELECT t.transaction_number AS id, t.transaction_date AS date, t.type, COALESCE(t.reference_number, '') AS reference,
       COALESCE(c.name, '') AS party, COALESCE(d.name, '') AS department,
       t.total_minor AS totalminor, t.payment_status AS status, t.approval_status AS approval,
       COALESCE(u.display_name, '') AS owner, t.due_date AS duedate, t.currency,
       t.subtotal_minor AS subtotalminor, t.tax_minor AS taxminor, t.description,
-      (SELECT a.new_json FROM audit_logs a WHERE a.resource_type = 'transaction' AND a.resource_id = t.id ORDER BY a.occurred_at DESC LIMIT 1) AS payloadjson
+      t.metadata_json AS payloadjson, t.version,
+      COALESCE((SELECT SUM(p.amount_minor) FROM transaction_payments p WHERE p.transaction_id = t.id),
+        CASE WHEN LOWER(t.payment_status) = 'paid' THEN t.total_minor ELSE 0 END) AS paidminor,
+      COALESCE((SELECT json_agg(json_build_object('date',p.payment_date,'amount',p.amount_minor / 100.0,'reportingAmount',p.amount_minor / 100.0 * p.exchange_rate))::text
+        FROM transaction_payments p WHERE p.transaction_id = t.id), '[]') AS paymentsjson
     FROM transactions t
     LEFT JOIN counterparties c ON c.id = t.counterparty_id
     LEFT JOIN departments d ON d.id = t.department_id
     LEFT JOIN users u ON u.id = t.responsible_user_id
     WHERE t.organization_id = $1 AND t.posting_status != 'deleted'
     ORDER BY t.transaction_date DESC, t.created_at DESC
-  `, [organizationId]);
+  `,
+    [organizationId],
+  );
 
   return result.map((row) => {
     const payload = parsePayload(row.payloadjson);
     const category = payload.category || '';
-    const accountCode = payload.accountCode || suggestAccount(row.type, category, row.description || '').code;
-    const accountName = getAccount(accountCode)?.name || suggestAccount(row.type, category, row.description || '').name;
+    const accountCode =
+      payload.accountCode ||
+      suggestAccount(row.type, category, row.description || '').code;
+    const accountName =
+      getAccount(accountCode)?.name ||
+      suggestAccount(row.type, category, row.description || '').name;
+    const amount = Number(row.totalminor) / 100;
+    const paidAmount = Number(row.paidminor) / 100;
+    const reportingAmount = reportingValue({
+      amount: String(amount),
+      currency: row.currency,
+      exchangeRate: payload.exchangeRate,
+    });
+    const payments = JSON.parse(row.paymentsjson) as NonNullable<
+      TransactionRecord['payments']
+    >;
+    if (!payments.length && paidAmount > 0 && reportingAmount !== null)
+      payments.push({
+        date: isoDate(row.date),
+        amount: paidAmount,
+        reportingAmount,
+      });
     return {
       id: row.id,
+      version: row.version,
+      paidAmount,
+      balance: Math.max(0, amount - paidAmount),
+      reportingAmount,
+      payments,
+      cashReportingAmount: payments.reduce(
+        (sum, payment) => sum + payment.reportingAmount,
+        0,
+      ),
+      missingExchangeRate: reportingAmount === null,
       date: formatDate(row.date),
       type: row.type,
       reference: row.reference,
@@ -90,7 +144,7 @@ export async function listTransactionRecords(): Promise<TransactionRecord[]> {
       purchaseOrder: payload.purchaseOrder || '',
       documentType: payload.documentType || '',
       taxTreatment: payload.taxTreatment || 'Standard VAT 10%',
-      exchangeRate: payload.exchangeRate || '',
+      exchangeRate: row.currency === 'KHR' ? '1' : payload.exchangeRate || '',
       journalType: payload.journalType || classifyJournal(row.type, row.status),
       accountCode,
       accountName,
@@ -102,13 +156,32 @@ export async function saveTransactionRecord(
   record: TransactionRecord,
   user: ChatGPTUser,
 ): Promise<TransactionRecord> {
-  const totalMinor = toMinor(record.amount);
+  const organizationId = await workspaceId();
+  authorize(user, 'write');
+  record.date = isoDate(record.date);
+  if (record.dueDate) record.dueDate = isoDate(record.dueDate);
+  if (
+    !['Income', 'Expense'].includes(record.type) ||
+    !['USD', 'KHR'].includes(record.currency || '')
+  )
+    throw new Error('Select a valid type and currency.');
+  if (record.currency === 'KHR') record.exchangeRate = '1';
+  if (
+    !Number.isFinite(Number(record.exchangeRate)) ||
+    Number(record.exchangeRate) <= 0
+  )
+    throw new Error('Enter the KHR exchange rate for this transaction.');
+  record.status = 'Pending';
+  record.approval = record.approval === 'draft' ? 'draft' : 'Finance review';
+  const totalMinor = minor(record.amount);
   const taxMinor = Math.max(0, toMinor(record.tax || '0'));
   const suppliedSubtotal = record.subtotal
     ? toMinor(record.subtotal)
     : totalMinor - taxMinor;
   const subtotalMinor = Math.min(totalMinor, Math.max(0, suppliedSubtotal));
-  const balancedTaxMinor = Math.max(0, totalMinor - subtotalMinor);
+  const balancedTaxMinor = taxMinor;
+  if (subtotalMinor + taxMinor !== totalMinor)
+    throw new Error('Subtotal plus tax must equal the total.');
   if (
     !record.id ||
     !record.reference ||
@@ -120,17 +193,35 @@ export async function saveTransactionRecord(
     throw new Error('Required transaction fields are missing.');
   }
 
-  const userId = `user-${stableKey(user.userId)}`;
-  const counterpartyId = `counterparty-${stableKey(record.party.toLowerCase())}`;
-  const departmentId = `department-${stableKey(record.department.toLowerCase())}`;
-  const existing = (await query<Record<string, unknown>>(
-    'SELECT * FROM transactions WHERE id = $1 AND organization_id = $2',
-    [record.id, organizationId],
-  ))[0];
+  const userId = `user-${stableKey(scopedKey(organizationId, user.userId))}`;
+  const counterpartyId = `counterparty-${stableKey(scopedKey(organizationId, record.party.toLowerCase()))}`;
+  const departmentId = `department-${stableKey(scopedKey(organizationId, record.department.toLowerCase()))}`;
+  const existing = (
+    await query<Record<string, unknown>>(
+      'SELECT * FROM transactions WHERE id = $1 AND organization_id = $2',
+      [record.id, organizationId],
+    )
+  )[0];
+  if (existing?.posting_status === 'deleted')
+    throw new Error('Deleted transactions cannot be edited.');
+  if (existing && Number(record.version) !== Number(existing.version))
+    throw new Error('This transaction has changed. Reload before editing.');
   if (!existing) {
-    const possibleDuplicates = await query<{ transaction_number: string; transaction_date: string }>(`SELECT transaction_number, transaction_date FROM transactions
-      WHERE organization_id = $1 AND reference_number = $2 AND counterparty_id = $3 AND total_minor = $4
-      AND posting_status != 'deleted' LIMIT 10`, [organizationId, record.reference, counterpartyId, totalMinor]);
+    const possibleDuplicates = await query<{
+      transaction_number: string;
+      transaction_date: string;
+    }>(
+      `SELECT transaction_number, transaction_date FROM transactions
+      WHERE organization_id = $1 AND reference_number = $2 AND counterparty_id = $3 AND total_minor = $4 AND currency = $5
+      AND posting_status != 'deleted'`,
+      [
+        organizationId,
+        record.reference,
+        counterpartyId,
+        totalMinor,
+        record.currency,
+      ],
+    );
     const duplicate = possibleDuplicates.find(
       (item) =>
         normalizeDate(item.transaction_date) === normalizeDate(record.date),
@@ -141,30 +232,164 @@ export async function saveTransactionRecord(
       );
   }
 
+  const documentIds = [...new Set(record.documentIds || [])];
+  if (
+    !Array.isArray(record.documentIds || []) ||
+    documentIds.length > 20 ||
+    documentIds.some((id) => typeof id !== 'string' || !id)
+  )
+    throw new Error('Invalid document attachments.');
   const statements = [
-    { text: `INSERT INTO organizations (id, name, code, functional_currency, timezone, fiscal_year_start_month)
-      VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = CURRENT_TIMESTAMP`, parameters: [organizationId, 'LedgerFlow Organization', 'LEDGERFLOW', record.currency || 'KHR', 'Asia/Phnom_Penh', 1] },
-    { text: `INSERT INTO users (id, organization_id, external_user_id, email, display_name, status)
-      VALUES ($1, $2, $3, $4, $5, 'active') ON CONFLICT(id) DO UPDATE SET email = excluded.email, display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP`, parameters: [userId, organizationId, user.userId, user.email, user.displayName] },
-    { text: `INSERT INTO counterparties (id, organization_id, type, code, name)
-      VALUES ($1, $2, $3, $4, $5) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, updated_at = CURRENT_TIMESTAMP`, parameters: [counterpartyId, organizationId, record.type === 'Income' ? 'customer' : 'vendor', `CP-${stableKey(record.party)}`, record.party] },
-    { text: `INSERT INTO departments (id, organization_id, code, name)
-      VALUES ($1, $2, $3, $4) ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = CURRENT_TIMESTAMP`, parameters: [departmentId, organizationId, `DEPT-${stableKey(record.department)}`, record.department] },
-    { text: `INSERT INTO transactions (
+    {
+      text: `SELECT ledgerflow_assert((SELECT COUNT(*) FROM documents WHERE organization_id=$1 AND id=ANY($2::text[]) AND (linked_transaction_id IS NULL OR linked_transaction_id=$3)) = cardinality($2::text[]), 'One or more attachments are unavailable or already linked to another transaction.')`,
+      parameters: [organizationId, documentIds, record.id],
+    },
+    {
+      text: `SELECT ledgerflow_assert(NOT EXISTS(SELECT 1 FROM transactions WHERE organization_id = $1 AND reference_number = $2
+      AND counterparty_id = $3 AND total_minor = $4 AND currency = $5 AND transaction_date = $6::date AND id != $7 AND posting_status != 'deleted'), 'Possible duplicate transaction.')`,
+      parameters: [
+        organizationId,
+        record.reference,
+        counterpartyId,
+        totalMinor,
+        record.currency,
+        record.date,
+        record.id,
+      ],
+    },
+    {
+      text: `SELECT ledgerflow_assert(NOT EXISTS(SELECT 1 FROM transactions WHERE id = $1 AND (organization_id != $2 OR version != $3 OR posting_status = 'deleted' OR NOT $4::boolean)), 'Transaction changed or is not accessible.')`,
+      parameters: [
+        record.id,
+        organizationId,
+        existing ? Number(existing.version) : 1,
+        !!existing,
+      ],
+    },
+    {
+      text: `SELECT ledgerflow_assert(NOT EXISTS(SELECT 1 FROM transaction_payments WHERE transaction_id = $1) AND NOT EXISTS(SELECT 1 FROM transactions WHERE id = $1 AND LOWER(payment_status) = 'paid'), 'Transactions with payments cannot be edited; record a separate adjustment.')`,
+      parameters: [record.id],
+    },
+    {
+      text: `INSERT INTO organizations (id, name, code, functional_currency, timezone, fiscal_year_start_month)
+      VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = CURRENT_TIMESTAMP`,
+      parameters: [
+        organizationId,
+        'LedgerFlow Organization',
+        organizationId,
+        record.currency || 'KHR',
+        'Asia/Phnom_Penh',
+        1,
+      ],
+    },
+    {
+      text: `INSERT INTO users (id, organization_id, external_user_id, email, display_name, status)
+      VALUES ($1, $2, $3, $4, $5, 'active') ON CONFLICT(id) DO UPDATE SET email = excluded.email, display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP`,
+      parameters: [
+        userId,
+        organizationId,
+        user.userId,
+        user.email,
+        user.displayName,
+      ],
+    },
+    {
+      text: `INSERT INTO counterparties (id, organization_id, type, code, name)
+      VALUES ($1, $2, $3, $4, $5) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, updated_at = CURRENT_TIMESTAMP`,
+      parameters: [
+        counterpartyId,
+        organizationId,
+        record.type === 'Income' ? 'customer' : 'vendor',
+        `CP-${stableKey(scopedKey(organizationId, record.party))}`,
+        record.party,
+      ],
+    },
+    {
+      text: `INSERT INTO departments (id, organization_id, code, name)
+      VALUES ($1, $2, $3, $4) ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = CURRENT_TIMESTAMP`,
+      parameters: [
+        departmentId,
+        organizationId,
+        `DEPT-${stableKey(scopedKey(organizationId, record.department))}`,
+        record.department,
+      ],
+    },
+    {
+      text: `INSERT INTO transactions (
       id, organization_id, transaction_number, transaction_date, type, reference_number, description,
       counterparty_id, department_id, currency, subtotal_minor, tax_minor, total_minor, due_date,
-      payment_status, approval_status, posting_status, responsible_user_id, created_by, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'unposted', $17, $18, CURRENT_TIMESTAMP)
+      payment_status, approval_status, posting_status, responsible_user_id, created_by, updated_at, metadata_json
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'unposted', $17, $18, CURRENT_TIMESTAMP, $19)
     ON CONFLICT(id) DO UPDATE SET transaction_date = excluded.transaction_date, type = excluded.type,
       reference_number = excluded.reference_number, description = excluded.description, counterparty_id = excluded.counterparty_id,
       department_id = excluded.department_id, currency = excluded.currency, subtotal_minor = excluded.subtotal_minor,
       tax_minor = excluded.tax_minor, total_minor = excluded.total_minor, due_date = excluded.due_date,
-      payment_status = excluded.payment_status, approval_status = excluded.approval_status,
-      responsible_user_id = excluded.responsible_user_id, updated_at = CURRENT_TIMESTAMP, version = transactions.version + 1`, parameters: [record.id, organizationId, record.id, normalizeDate(record.date), record.type, record.reference, record.description, counterpartyId, departmentId, record.currency || 'KHR', subtotalMinor, balancedTaxMinor, totalMinor, record.dueDate ? normalizeDate(record.dueDate) : null, record.status, record.approval, userId, userId] },
-    { text: `INSERT INTO audit_logs (id, organization_id, actor_user_id, action, resource_type, resource_id, previous_json, new_json, reason, correlation_id)
-      VALUES ($1, $2, $3, $4, 'transaction', $5, $6, $7, $8, $9)`, parameters: [crypto.randomUUID(), organizationId, userId, existing ? 'update' : 'create', record.id, existing ? JSON.stringify(existing) : null, JSON.stringify(record), existing ? 'Transaction edited and returned for finance review.' : 'Transaction recorded.', crypto.randomUUID()] },
+      payment_status = excluded.payment_status, approval_status = excluded.approval_status, metadata_json = excluded.metadata_json,
+      responsible_user_id = excluded.responsible_user_id, updated_at = CURRENT_TIMESTAMP, version = transactions.version + 1`,
+      parameters: [
+        record.id,
+        organizationId,
+        record.id,
+        normalizeDate(record.date),
+        record.type,
+        record.reference,
+        record.description,
+        counterpartyId,
+        departmentId,
+        record.currency || 'KHR',
+        subtotalMinor,
+        balancedTaxMinor,
+        totalMinor,
+        record.dueDate ? normalizeDate(record.dueDate) : null,
+        record.status,
+        record.approval,
+        userId,
+        userId,
+        JSON.stringify(record),
+      ],
+    },
+    {
+      text: `INSERT INTO audit_logs (id, organization_id, actor_user_id, action, resource_type, resource_id, previous_json, new_json, reason, correlation_id)
+      VALUES ($1, $2, $3, $4, 'transaction', $5, $6, $7, $8, $9)`,
+      parameters: [
+        crypto.randomUUID(),
+        organizationId,
+        userId,
+        existing ? 'update' : 'create',
+        record.id,
+        existing ? JSON.stringify(existing) : null,
+        JSON.stringify(record),
+        existing
+          ? 'Transaction edited and returned for finance review.'
+          : 'Transaction recorded.',
+        crypto.randomUUID(),
+      ],
+    },
   ];
-  await executeBatch(statements);
+  if (documentIds.length)
+    statements.push(
+      {
+        text: `UPDATE documents SET linked_transaction_id=$3,linked_reference=$4,status='Pending review',processing_status='Created' WHERE organization_id=$1 AND id=ANY($2::text[])`,
+        parameters: [organizationId, documentIds, record.id, record.reference],
+      },
+      {
+        text: `INSERT INTO audit_logs(id,organization_id,actor_user_id,action,resource_type,resource_id,new_json,correlation_id) VALUES($1,$2,$3,'attach','transaction',$4,$5,$1)`,
+        parameters: [
+          crypto.randomUUID(),
+          organizationId,
+          userId,
+          record.id,
+          JSON.stringify({ documentIds }),
+        ],
+      },
+    );
+  await executeBatch(statements, {
+    organizationId,
+    dates: [
+      record.date,
+      ...(existing ? [isoDate(String(existing.transaction_date))] : []),
+    ],
+  });
   const saved = (await listTransactionRecords()).find(
     (item) => item.id === record.id,
   );
@@ -173,23 +398,74 @@ export async function saveTransactionRecord(
   return saved;
 }
 
-export async function deleteTransactionRecord(id: string, user: ChatGPTUser): Promise<void> {
-  const existing = (await query<Record<string, unknown>>(
-    `SELECT * FROM transactions WHERE id = $1 AND organization_id = $2 AND posting_status != 'deleted'`,
-    [id, organizationId],
-  ))[0];
+export async function deleteTransactionRecord(
+  id: string,
+  user: ChatGPTUser,
+): Promise<void> {
+  const organizationId = await workspaceId();
+  authorize(user, 'write');
+  const existing = (
+    await query<Record<string, unknown>>(
+      `SELECT * FROM transactions WHERE id = $1 AND organization_id = $2 AND posting_status != 'deleted'`,
+      [id, organizationId],
+    )
+  )[0];
   if (!existing) throw new Error('Transaction not found.');
 
-  const userId = `user-${stableKey(user.userId)}`;
-  await executeBatch([
-    { text: `INSERT INTO organizations (id, name, code, functional_currency, timezone, fiscal_year_start_month)
-      VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT(id) DO NOTHING`, parameters: [organizationId, 'LedgerFlow Organization', 'LEDGERFLOW', 'KHR', 'Asia/Phnom_Penh', 1] },
-    { text: `INSERT INTO users (id, organization_id, external_user_id, email, display_name, status)
-      VALUES ($1, $2, $3, $4, $5, 'active') ON CONFLICT(id) DO UPDATE SET email = excluded.email, display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP`, parameters: [userId, organizationId, user.userId, user.email, user.displayName] },
-    { text: `UPDATE transactions SET posting_status = 'deleted', updated_at = CURRENT_TIMESTAMP, version = version + 1 WHERE id = $1 AND organization_id = $2`, parameters: [id, organizationId] },
-    { text: `INSERT INTO audit_logs (id, organization_id, actor_user_id, action, resource_type, resource_id, previous_json, new_json, reason, correlation_id)
-      VALUES ($1, $2, $3, 'delete', 'transaction', $4, $5, NULL, $6, $7)`, parameters: [crypto.randomUUID(), organizationId, userId, id, JSON.stringify(existing), 'Transaction deleted by user.', crypto.randomUUID()] },
-  ]);
+  const userId = `user-${stableKey(scopedKey(organizationId, user.userId))}`;
+  await executeBatch(
+    [
+      {
+        text: `SELECT ledgerflow_assert(NOT EXISTS(SELECT 1 FROM transaction_payments WHERE transaction_id = $1) AND NOT EXISTS(SELECT 1 FROM transactions WHERE id = $1 AND LOWER(payment_status) = 'paid'), 'Transactions with payments cannot be deleted.')`,
+        parameters: [id],
+      },
+      {
+        text: `SELECT ledgerflow_assert((SELECT version = $3 FROM transactions WHERE id=$1 AND organization_id=$2), 'Transaction changed. Reload before deleting.')`,
+        parameters: [id, organizationId, existing.version],
+      },
+      {
+        text: `INSERT INTO organizations (id, name, code, functional_currency, timezone, fiscal_year_start_month)
+      VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT(id) DO NOTHING`,
+        parameters: [
+          organizationId,
+          'LedgerFlow Organization',
+          organizationId,
+          'KHR',
+          'Asia/Phnom_Penh',
+          1,
+        ],
+      },
+      {
+        text: `INSERT INTO users (id, organization_id, external_user_id, email, display_name, status)
+      VALUES ($1, $2, $3, $4, $5, 'active') ON CONFLICT(id) DO UPDATE SET email = excluded.email, display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP`,
+        parameters: [
+          userId,
+          organizationId,
+          user.userId,
+          user.email,
+          user.displayName,
+        ],
+      },
+      {
+        text: `UPDATE transactions SET posting_status = 'deleted', updated_at = CURRENT_TIMESTAMP, version = version + 1 WHERE id = $1 AND organization_id = $2`,
+        parameters: [id, organizationId],
+      },
+      {
+        text: `INSERT INTO audit_logs (id, organization_id, actor_user_id, action, resource_type, resource_id, previous_json, new_json, reason, correlation_id)
+      VALUES ($1, $2, $3, 'delete', 'transaction', $4, $5, NULL, $6, $7)`,
+        parameters: [
+          crypto.randomUUID(),
+          organizationId,
+          userId,
+          id,
+          JSON.stringify(existing),
+          'Transaction deleted by user.',
+          crypto.randomUUID(),
+        ],
+      },
+    ],
+    { organizationId, dates: [isoDate(String(existing.transaction_date))] },
+  );
 }
 
 function toMinor(value: string) {
@@ -204,31 +480,8 @@ function formatMoney(minor: number, currency: string) {
   }).format(minor / 100);
 }
 
-function normalizeDate(value: string) {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const match = value.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
-  if (match) {
-    const month = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ].indexOf(match[2].slice(0, 3));
-    if (month >= 0)
-      return `${match[3]}-${String(month + 1).padStart(2, '0')}-${match[1].padStart(2, '0')}`;
-  }
-  const parsed = new Date(value);
-  return Number.isFinite(parsed.getTime())
-    ? parsed.toISOString().slice(0, 10)
-    : value;
+function normalizeDate(value: string | Date) {
+  return isoDate(value);
 }
 
 function formatDate(value: string | Date) {

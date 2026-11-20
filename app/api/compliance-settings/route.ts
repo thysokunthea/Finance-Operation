@@ -1,4 +1,4 @@
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getChatGPTUser, authorize } from '@/app/chatgpt-auth';
 import {
   getComplianceSettings,
   saveComplianceSettings,
@@ -13,6 +13,7 @@ export async function GET() {
       { status: 401 },
     );
   try {
+    authorize(user, 'read');
     return Response.json(
       { settings: await getComplianceSettings() },
       { headers: { 'Cache-Control': 'no-store' } },
@@ -25,7 +26,12 @@ export async function GET() {
             ? error.message
             : 'Compliance settings could not be loaded.',
       },
-      { status: 500 },
+      {
+        status:
+          error instanceof Error && error.message.startsWith('Forbidden:')
+            ? 403
+            : 500,
+      },
     );
   }
 }
@@ -38,6 +44,7 @@ export async function POST(request: Request) {
       { status: 401 },
     );
   try {
+    authorize(user, 'admin');
     return Response.json({
       settings: await saveComplianceSettings(
         (await request.json()) as ComplianceSettings,
@@ -52,7 +59,12 @@ export async function POST(request: Request) {
             ? error.message
             : 'Compliance settings could not be saved.',
       },
-      { status: 400 },
+      {
+        status:
+          error instanceof Error && error.message.startsWith('Forbidden:')
+            ? 403
+            : 400,
+      },
     );
   }
 }

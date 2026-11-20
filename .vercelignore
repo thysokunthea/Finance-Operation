@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+.vercel
+.vercel-cli-config
+.vercel-cli-data
+.pnpm-store
+.git
+.next
+node_modules
+coverage
+*.tsbuildinfo

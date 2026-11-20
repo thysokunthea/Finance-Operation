@@ -1,30 +1,88 @@
 export type Lang = 'en' | 'km';
 
 export const statusLabels: Record<Lang, Record<string, string>> = {
-  en: { 'All statuses': 'All statuses', Paid: 'Paid', Approved: 'Approved', Pending: 'Pending', Overdue: 'Overdue', 'Missing Document': 'Missing Document' },
-  km: { 'All statuses': 'ស្ថានភាពទាំងអស់', Paid: 'បានបង់ប្រាក់', Approved: 'បានអនុម័ត', Pending: 'កំពុងរង់ចាំ', Overdue: 'ហួសកាលកំណត់', 'Missing Document': 'ខ្វះឯកសារ' },
+  en: {
+    'All statuses': 'All statuses',
+    Paid: 'Paid',
+    Approved: 'Approved',
+    Pending: 'Pending',
+    Overdue: 'Overdue',
+    'Missing Document': 'Missing Document',
+  },
+  km: {
+    'All statuses': 'ស្ថានភាពទាំងអស់',
+    Paid: 'បានបង់ប្រាក់',
+    Approved: 'បានអនុម័ត',
+    Pending: 'កំពុងរង់ចាំ',
+    Overdue: 'ហួសកាលកំណត់',
+    'Missing Document': 'ខ្វះឯកសារ',
+  },
 };
 export const departmentLabels: Record<Lang, Record<string, string>> = {
-  en: { 'All departments': 'All departments', Operations: 'Operations', Commercial: 'Commercial', Technology: 'Technology', Marketing: 'Marketing' },
-  km: { 'All departments': 'នាយកដ្ឋានទាំងអស់', Operations: 'ប្រតិបត្តិការ', Commercial: 'ពាណិជ្ជកម្ម', Technology: 'បច្ចេកវិទ្យា', Marketing: 'ទីផ្សារ' },
+  en: {
+    'All departments': 'All departments',
+    Operations: 'Operations',
+    Commercial: 'Commercial',
+    Technology: 'Technology',
+    Marketing: 'Marketing',
+  },
+  km: {
+    'All departments': 'នាយកដ្ឋានទាំងអស់',
+    Operations: 'ប្រតិបត្តិការ',
+    Commercial: 'ពាណិជ្ជកម្ម',
+    Technology: 'បច្ចេកវិទ្យា',
+    Marketing: 'ទីផ្សារ',
+  },
 };
 export const txTypeLabels: Record<Lang, Record<string, string>> = {
   en: { Income: 'Income', Expense: 'Expense', All: 'Transactions' },
   km: { Income: 'ចំណូល', Expense: 'ចំណាយ', All: 'ប្រតិបត្តិការ' },
 };
 export const taxTreatmentLabels: Record<Lang, Record<string, string>> = {
-  en: { 'Standard VAT 10%': 'Standard VAT 10%', 'Zero-rated 0%': 'Zero-rated 0%', Exempt: 'Exempt', 'Non-taxable': 'Non-taxable', 'Review required': 'Review required' },
-  km: { 'Standard VAT 10%': 'អាករតម្លៃបន្ថែមស្តង់ដារ ១០%', 'Zero-rated 0%': 'អត្រាសូន្យ ០%', Exempt: 'លើកលែង', 'Non-taxable': 'មិនជាប់អាករ', 'Review required': 'ត្រូវពិនិត្យឡើងវិញ' },
+  en: {
+    'Standard VAT 10%': 'Standard VAT 10%',
+    'Zero-rated 0%': 'Zero-rated 0%',
+    Exempt: 'Exempt',
+    'Non-taxable': 'Non-taxable',
+    'Review required': 'Review required',
+  },
+  km: {
+    'Standard VAT 10%': 'អាករតម្លៃបន្ថែមស្តង់ដារ ១០%',
+    'Zero-rated 0%': 'អត្រាសូន្យ ០%',
+    Exempt: 'លើកលែង',
+    'Non-taxable': 'មិនជាប់អាករ',
+    'Review required': 'ត្រូវពិនិត្យឡើងវិញ',
+  },
 };
 
 export const taskStatusLabels: Record<Lang, Record<string, string>> = {
-  en: { 'Not Started': 'Not Started', 'In Progress': 'In Progress', Waiting: 'Waiting', Completed: 'Completed' },
-  km: { 'Not Started': 'មិនទាន់ចាប់ផ្តើម', 'In Progress': 'កំពុងដំណើរការ', Waiting: 'កំពុងរង់ចាំ', Completed: 'បានបញ្ចប់' },
+  en: {
+    'Not Started': 'Not Started',
+    'In Progress': 'In Progress',
+    Waiting: 'Waiting',
+    Completed: 'Completed',
+  },
+  km: {
+    'Not Started': 'មិនទាន់ចាប់ផ្តើម',
+    'In Progress': 'កំពុងដំណើរការ',
+    Waiting: 'កំពុងរង់ចាំ',
+    Completed: 'បានបញ្ចប់',
+  },
 };
 
 export const taxpayerClassLabels: Record<Lang, Record<string, string>> = {
-  en: { Unconfirmed: 'Unconfirmed', 'Small taxpayer': 'Small taxpayer', 'Medium taxpayer': 'Medium taxpayer', 'Large taxpayer': 'Large taxpayer' },
-  km: { Unconfirmed: 'មិនទាន់បញ្ជាក់', 'Small taxpayer': 'អ្នកបង់ពន្ធខ្នាតតូច', 'Medium taxpayer': 'អ្នកបង់ពន្ធខ្នាតមធ្យម', 'Large taxpayer': 'អ្នកបង់ពន្ធខ្នាតធំ' },
+  en: {
+    Unconfirmed: 'Unconfirmed',
+    'Small taxpayer': 'Small taxpayer',
+    'Medium taxpayer': 'Medium taxpayer',
+    'Large taxpayer': 'Large taxpayer',
+  },
+  km: {
+    Unconfirmed: 'មិនទាន់បញ្ជាក់',
+    'Small taxpayer': 'អ្នកបង់ពន្ធខ្នាតតូច',
+    'Medium taxpayer': 'អ្នកបង់ពន្ធខ្នាតមធ្យម',
+    'Large taxpayer': 'អ្នកបង់ពន្ធខ្នាតធំ',
+  },
 };
 export const gdtFilingLabels: Record<Lang, Record<string, string>> = {
   en: { Online: 'Online', Manual: 'Manual' },
@@ -119,7 +177,11 @@ export const accountLabels: Record<Lang, Record<string, string>> = {
   },
 };
 
-export function translateEnum(map: Record<Lang, Record<string, string>>, lang: Lang, raw: string): string {
+export function translateEnum(
+  map: Record<Lang, Record<string, string>>,
+  lang: Lang,
+  raw: string,
+): string {
   return map[lang]?.[raw] ?? raw;
 }
 
@@ -156,7 +218,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'shell.language': 'Language',
 
     'dashboard.title': 'Finance overview',
-    'dashboard.subtitle': 'Review saved income and expenses for the selected period.',
+    'dashboard.subtitle':
+      'Review saved income and expenses for the selected period.',
     'dashboard.selectMonth': 'Select month',
     'dashboard.allDepartments': 'All departments',
     'dashboard.export': 'Export',
@@ -190,7 +253,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'attention.receivablesTitle': '{count} invoice{plural} overdue',
     'attention.receivablesDetail': '{amount} outstanding',
     'attention.documentsTitle': '{count} document{plural} missing evidence',
-    'attention.documentsDetailPending': 'Open the Documents workspace to resolve',
+    'attention.documentsDetailPending':
+      'Open the Documents workspace to resolve',
     'attention.documentsDetailClear': 'All uploaded documents are verified',
     'attention.payablesTitle': '{count} payment{plural} due this week',
     'attention.payablesDetail': '{amount} scheduled',
@@ -216,19 +280,52 @@ export const translations: Record<Lang, Record<string, string>> = {
     'budget.committed': 'Committed',
     'budget.remaining': 'Remaining',
     'budget.thresholdReached': 'Budget threshold reached',
-    'budget.thresholdDetail': 'Spending has reached {percent}% of the monthly budget.',
+    'budget.thresholdDetail':
+      'Spending has reached {percent}% of the monthly budget.',
     'budget.withinBudget': 'Spending is within the monthly budget.',
     'budget.reviewDetails': 'Review budget details',
 
     'tx.titleIncome': 'Income register',
     'tx.titleExpense': 'Expense register',
     'tx.titleAll': 'Transaction register',
-    'tx.copyIncome': 'Track recognized revenue, collections, and supporting invoices.',
-    'tx.copyExpense': 'Control operating spend, evidence, approvals, and payment status.',
+    'tx.copyIncome':
+      'Track recognized revenue, collections, and supporting invoices.',
+    'tx.copyExpense':
+      'Control operating spend, evidence, approvals, and payment status.',
     'tx.copyAll': 'Review, trace, and control all financial activity.',
     'tx.breadcrumbFinance': 'Finance',
     'tx.export': 'Export',
     'tx.scanDocument': 'Scan document',
+    'tx.uploadFiles': 'Upload files',
+    'tx.uploadReviewRequired':
+      'Files uploaded. Complete the transaction details and click Save pending record to create the record and link these files.',
+    'tx.scanUploadedFile': 'Read uploaded invoice / receipt',
+    'tx.continueUploadedRecord': 'Continue creating record from uploaded files',
+    'tx.uploadedDocumentUnavailable':
+      'The uploaded document was not found or is not accessible in this workspace.',
+    'docs.createRecord': 'Create transaction record',
+    'tx.autoTitle': 'Automatic Transaction Creation from Uploaded Documents',
+    'tx.autoHint':
+      'One transaction per document. Clear invoice details create Pending records automatically. Missing or uncertain details go to review. Records are never automatically approved or paid.',
+    'tx.autoRate': 'KHR per USD (when not printed on the document)',
+    'tx.autoRatePlaceholder': 'Required for USD documents',
+    'tx.autoProcessing': 'Reading document…',
+    'tx.autoCreateNow': 'Create automatically',
+    'tx.autoFailed': 'Automatic creation failed. Review the uploaded document.',
+    'tx.autoStatus.created': 'Transaction created',
+    'tx.autoStatus.existing': 'Already recorded',
+    'tx.autoStatus.duplicate': 'Duplicate prevented',
+    'tx.autoStatus.needs_review': 'Needs review',
+    'tx.autoSummary':
+      '{created} record(s) created · {review} need review · {duplicates} already recorded.',
+    'tx.uploadTransportSize':
+      'The upload is too large for this request. Use a file smaller than 3 MB.',
+    'tx.attachFiles': 'Attach files',
+    'tx.uploadHint':
+      'Upload files, review the transaction details, then save the record. Use Attach files to add evidence to an existing record.',
+    'tx.uploadSizeError': '{name}: choose a non-empty file up to 8 MB.',
+    'tx.uploadLinkFailed':
+      '{name} was uploaded, but could not be linked. Link it from Documents.',
     'tx.scanDocumentTitle': 'Upload or drop a PNG, JPG, or PDF',
     'tx.ocrImport': 'OCR Import',
     'tx.ocrImportTitle': 'Capture a document with your phone or live camera',
@@ -245,17 +342,20 @@ export const translations: Record<Lang, Record<string, string>> = {
     'tx.custom': 'Custom',
     'tx.from': 'From',
     'tx.to': 'To',
-    'tx.dateHelp': 'The current month is selected automatically. Dates are available through 31 December 2030.',
+    'tx.dateHelp':
+      'The current month is selected automatically. Dates are available through 31 December 2030.',
     'tx.department': 'Department',
     'tx.resetFilters': 'Reset filters',
     'tx.loading': 'Loading transactions…',
     'tx.countTransactions': '{count} transactions',
     'tx.financeRegister': 'Finance register',
     'tx.emptyNoneTitle': 'No transactions in this register',
-    'tx.emptyScopeMismatchTitle': '{count} saved transaction{plural} found outside {type}',
+    'tx.emptyScopeMismatchTitle':
+      '{count} saved transaction{plural} found outside {type}',
     'tx.emptyNoMatchTitle': 'No matching transactions',
     'tx.emptyNoneCopy': 'Create, scan, or OCR-import a transaction.',
-    'tx.emptyScopeMismatchCopy': 'Open All Transactions to review the saved records and their transaction types.',
+    'tx.emptyScopeMismatchCopy':
+      'Open All Transactions to review the saved records and their transaction types.',
     'tx.emptyNoMatchCopy': 'Adjust or clear the active filters.',
     'tx.viewAllTransactions': 'View all transactions',
     'tx.clearFilters': 'Clear filters',
@@ -269,11 +369,14 @@ export const translations: Record<Lang, Record<string, string>> = {
     'tx.viewDocuments': 'View documents',
     'tx.editTransaction': 'Edit transaction',
     'tx.noSelectionTitle': 'No transaction selected',
-    'tx.noSelectionCopy': 'Create or import a transaction to review its details.',
+    'tx.noSelectionCopy':
+      'Create or import a transaction to review its details.',
     'tx.editTitle': 'Edit {id}',
     'tx.reviewTransaction': 'Review transaction',
-    'tx.editSubtitle': 'Changes return the record to Pending finance review and remain traceable.',
-    'tx.newSubtitle': 'Confirm scanned values. Saving creates a Pending record for finance review.',
+    'tx.editSubtitle':
+      'Changes return the record to Pending finance review and remain traceable.',
+    'tx.newSubtitle':
+      'Confirm scanned values. Saving creates a Pending record for finance review.',
     'tx.cancel': 'Cancel',
     'tx.saving': 'Saving…',
     'tx.saveChanges': 'Save changes for review',
@@ -281,17 +384,20 @@ export const translations: Record<Lang, Record<string, string>> = {
     'tx.delete': 'Delete',
     'tx.deleteTransaction': 'Delete transaction',
     'tx.deleteConfirmTitle': 'Delete {id}?',
-    'tx.deleteConfirmDesc': 'This will remove the transaction from your active records. This action cannot be undone from here.',
+    'tx.deleteConfirmDesc':
+      'This will remove the transaction from your active records. This action cannot be undone from here.',
     'tx.deleting': 'Deleting…',
     'tx.deleteFailed': 'Transaction could not be deleted.',
     'tx.deletedNotice': '{id} was deleted.',
-    'tx.noticeValidation': 'Complete customer/vendor, reference, issue date, description, category, amount, and the KHR exchange rate.',
+    'tx.noticeValidation':
+      'Complete customer/vendor, reference, issue date, description, category, amount, and the KHR exchange rate.',
     'tx.noticeSaving': 'Saving transaction…',
     'tx.noticeUpdated': '{id} updated and returned to Pending finance review.',
     'tx.noticeSaved': '{id} saved permanently as Pending.',
     'tx.noticeSaveFailed': 'Transaction could not be saved.',
     'tx.noticeLoadFailed': 'Transactions could not be loaded.',
-    'tx.noticeScanApplied': 'Scanned fields were auto-filled. Confirm Cambodia VAT treatment and the KHR exchange rate before saving.',
+    'tx.noticeScanApplied':
+      'Scanned fields were auto-filled. Confirm Cambodia VAT treatment and the KHR exchange rate before saving.',
 
     'field.reference': 'Reference',
     'field.issueDate': 'Issue date',
@@ -317,7 +423,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'field.account': 'Account',
 
     'journals.title': 'Special Journals',
-    'journals.copy': 'Transactions classified into Cambodia GDT small-taxpayer special journals — one entry per transaction, no double-entry posting required.',
+    'journals.copy':
+      'Transactions classified into Cambodia GDT small-taxpayer special journals — one entry per transaction, no double-entry posting required.',
     'journals.tabSummary': 'Summary',
     'journals.date': 'Date',
     'journals.entries': '{count} entries',
@@ -326,7 +433,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'tasks.filterOpen': 'Open',
     'tasks.filterAll': 'All',
     'tasks.title': 'My finance tasks',
-    'tasks.subtitle': 'Everything requiring your attention, ordered by urgency.',
+    'tasks.subtitle':
+      'Everything requiring your attention, ordered by urgency.',
     'tasks.createTask': 'Create task',
     'tasks.dueToday': 'Due today',
     'tasks.inProgress': 'In progress',
@@ -343,8 +451,10 @@ export const translations: Record<Lang, Record<string, string>> = {
 
     'ledger.receivablesTitle': 'Accounts receivable',
     'ledger.payablesTitle': 'Accounts payable',
-    'ledger.receivablesCopy': 'Collect faster and keep every customer follow-up visible.',
-    'ledger.payablesCopy': 'Plan supplier payments and prevent late-payment risk.',
+    'ledger.receivablesCopy':
+      'Collect faster and keep every customer follow-up visible.',
+    'ledger.payablesCopy':
+      'Plan supplier payments and prevent late-payment risk.',
     'ledger.newInvoice': 'New invoice',
     'ledger.recordBill': 'Record bill',
     'ledger.outstanding': 'Outstanding',
@@ -375,55 +485,64 @@ export const translations: Record<Lang, Record<string, string>> = {
     'ledger.days60plus': '60+ days',
     'ledger.collectionQueue': 'Collection queue',
     'ledger.paymentCalendar': 'Payment calendar',
-    'ledger.overdueInvoicesNeedFollowUp': '{count} overdue invoice{plural} need follow-up',
+    'ledger.overdueInvoicesNeedFollowUp':
+      '{count} overdue invoice{plural} need follow-up',
     'ledger.paymentsDueWithin7': '{count} payment{plural} due within 7 days',
     'ledger.customersOverdue': '{count} customer{plural} overdue',
     'ledger.paymentsDueThisWeek': '{count} payment{plural} due this week',
-    'ledger.basedOnDueDates': 'Based on due dates recorded on saved transactions',
+    'ledger.basedOnDueDates':
+      'Based on due dates recorded on saved transactions',
     'ledger.openFollowUpTasks': 'Open follow-up tasks',
     'ledger.openPaymentSchedule': 'Open payment schedule',
     'ledger.unknownCounterparty': 'Unknown counterparty',
     'ledger.loadFailed': 'Ledger data could not be loaded.',
 
     'req.title': 'Payment requests',
-    'req.copy': 'Submit, review, authorize, pay, and close requests in one controlled workflow.',
+    'req.copy':
+      'Submit, review, authorize, pay, and close requests in one controlled workflow.',
     'req.creating': 'Creating…',
     'req.newRequest': 'New request',
     'req.pendingValue': 'Pending value',
     'req.requestsInQueue': 'Requests in queue',
     'req.approvedSoFar': 'Approved so far',
     'req.queueTitle': 'Request queue',
-    'req.queueDesc': 'Approval levels are selected from configured amount rules',
+    'req.queueDesc':
+      'Approval levels are selected from configured amount rules',
     'req.noneYet': 'No payment requests yet.',
     'req.loadFailed': 'Payment requests could not be loaded.',
     'req.createFailed': 'Request could not be created.',
 
-    'budgets2.copy': 'Monitor actual spending against department limits before they are exceeded.',
+    'budgets2.copy':
+      'Monitor actual spending against department limits before they are exceeded.',
     'budgets2.monthlyBudget': 'Monthly budget',
     'budgets2.actualSpending': 'Actual spending',
     'budgets2.departmentPlaceholder': 'e.g. Technology',
     'budgets2.monthlyLimitUsd': 'Monthly limit (USD)',
     'budgets2.setBudget': 'Set budget',
     'budgets2.utilizationTitle': 'Department utilization',
-    'budgets2.utilizationDesc': 'Actual spend this month compared with the configured budget',
+    'budgets2.utilizationDesc':
+      'Actual spend this month compared with the configured budget',
     'budgets2.noneYet': 'No department budgets configured yet.',
     'budgets2.loadFailed': 'Budgets could not be loaded.',
     'budgets2.saveFailed': 'Budget could not be saved.',
 
     'acct.title': 'Accounting summary',
-    'acct.copy': 'A category-level rollup of posted transactions, grouped like a lightweight chart of accounts.',
+    'acct.copy':
+      'A category-level rollup of posted transactions, grouped like a lightweight chart of accounts.',
     'acct.totalIncome': 'Total income',
     'acct.totalExpense': 'Total expense',
     'acct.netPosition': 'Net position',
     'acct.accountsByCategory': 'Accounts by category',
-    'acct.accountsByCategoryDesc': 'Income and expense categories rolled up from recorded transactions',
+    'acct.accountsByCategoryDesc':
+      'Income and expense categories rolled up from recorded transactions',
     'acct.total': 'Total',
     'acct.entries': 'Entries',
     'acct.noneYet': 'No transactions recorded yet.',
     'acct.loadFailed': 'Accounting data could not be loaded.',
 
     'appr.title': 'Approval center',
-    'appr.copy': 'Review evidence, coding, and authority before finance processes payment.',
+    'appr.copy':
+      'Review evidence, coding, and authority before finance processes payment.',
     'appr.pendingApprovals': 'Pending approvals',
     'appr.valueAwaitingReview': 'Value awaiting review',
     'appr.audited': 'Audited',
@@ -435,15 +554,18 @@ export const translations: Record<Lang, Record<string, string>> = {
     'appr.approving': 'Approving…',
     'appr.approve': 'Approve',
     'appr.noneWaiting': 'No approvals waiting',
-    'appr.noneWaitingCopy': 'New or edited transactions will appear here for review.',
+    'appr.noneWaitingCopy':
+      'New or edited transactions will appear here for review.',
     'appr.loadingApprovals': 'Loading saved approvals…',
     'appr.savingApproval': 'Saving approval…',
-    'appr.approvedNotice': '{id} approved. The decision was saved with an audit trail.',
+    'appr.approvedNotice':
+      '{id} approved. The decision was saved with an audit trail.',
     'appr.loadFailed': 'Approvals could not be loaded.',
     'appr.saveFailed': 'Approval could not be saved.',
 
     'close.periodClose': '{period} close',
-    'close.copy': 'Complete and evidence every control before the accounting period is locked.',
+    'close.copy':
+      'Complete and evidence every control before the accounting period is locked.',
     'close.complete': 'Complete',
     'close.progressLabel': 'Closing progress',
     'close.progressDetail': '{percent}% · {done}/{total} complete',
@@ -451,10 +573,12 @@ export const translations: Record<Lang, Record<string, string>> = {
     'close.saveFailed': 'Closing task could not be saved.',
 
     'asst.title': 'Finance assistant',
-    'asst.copy': 'Ask questions only across records your current role is authorized to view.',
+    'asst.copy':
+      'Ask questions only across records your current role is authorized to view.',
     'asst.askLedgerFlow': 'Ask LedgerFlow',
     'asst.readOnly': 'Read-only analysis · no posting or approval authority',
-    'asst.tryPrompt': 'Try: "Which department is over budget?" or "What payments are due next week?"',
+    'asst.tryPrompt':
+      'Try: "Which department is over budget?" or "What payments are due next week?"',
     'asst.aiAnswer': 'AI answer grounded in your finance data',
     'asst.rulesAnswer': 'Answer from authorized finance data',
     'asst.you': 'You',
@@ -463,21 +587,30 @@ export const translations: Record<Lang, Record<string, string>> = {
     'asst.clearChat': 'Clear chat',
     'asst.noOverdueInvoices': 'No customer invoices are currently overdue.',
     'asst.owesTemplate': '{party} owes {amount}',
-    'asst.overdueSummary': '{count} customer{plural} overdue: {list}. Total overdue: {total}.',
-    'asst.noBudgetsConfigured': 'No department budgets are configured yet. Set them up on the Budgets page.',
-    'asst.noneOverBudget': 'No department is over budget. Highest utilization: {detail}.',
+    'asst.overdueSummary':
+      '{count} customer{plural} overdue: {list}. Total overdue: {total}.',
+    'asst.noBudgetsConfigured':
+      'No department budgets are configured yet. Set them up on the Budgets page.',
+    'asst.noneOverBudget':
+      'No department is over budget. Highest utilization: {detail}.',
     'asst.atPercentOfBudget': '{department} at {percent}%',
     'asst.naDetail': 'n/a',
-    'asst.overBudgetItem': '{department} is at {percent}% of its {limit} budget',
-    'asst.noSupplierPaymentsDue': 'No supplier payments are due in the next 7 days.',
-    'asst.paymentsDueSummary': '{count} payment{plural} due within 7 days, totaling {total}: {list}.',
-    'asst.monthlySummary': "Based on records available to your role, this month's revenue is {revenue}, expenses are {expenses}, and net result is {net}.",
+    'asst.overBudgetItem':
+      '{department} is at {percent}% of its {limit} budget',
+    'asst.noSupplierPaymentsDue':
+      'No supplier payments are due in the next 7 days.',
+    'asst.paymentsDueSummary':
+      '{count} payment{plural} due within 7 days, totaling {total}: {list}.',
+    'asst.monthlySummary':
+      "Based on records available to your role, this month's revenue is {revenue}, expenses are {expenses}, and net result is {net}.",
     'asst.unknown': 'Unknown',
 
     'settings.title': 'Finance controls',
-    'settings.copy': 'Configure accounting, tax, approval, and automation safeguards.',
+    'settings.copy':
+      'Configure accounting, tax, approval, and automation safeguards.',
     'settings.profileTitle': 'Cambodia accounting and tax profile',
-    'settings.profileDesc': 'Statutory controls based on ACAR requirements and General Department of Taxation guidance. Confirm the entity classification with your Cambodian accountant or tax adviser.',
+    'settings.profileDesc':
+      'Statutory controls based on ACAR requirements and General Department of Taxation guidance. Confirm the entity classification with your Cambodian accountant or tax adviser.',
     'settings.reportingFramework': 'Reporting framework',
     'settings.gdtClassification': 'GDT taxpayer classification',
     'settings.gdtFilingMethod': 'GDT filing method',
@@ -489,52 +622,67 @@ export const translations: Record<Lang, Record<string, string>> = {
     'settings.fiscalYearValue': 'January–December',
     'settings.retention': 'Record retention (years)',
     'settings.requiredControls': 'Required controls',
-    'settings.requiredControlsDesc': 'Every entry requires a valid voucher. Statutory reporting remains in Khmer and KHR, foreign-currency entries require a KHR equivalent, records are retained for at least 10 years, and tax calculations require finance review before filing.',
+    'settings.requiredControlsDesc':
+      'Every entry requires a valid voucher. Statutory reporting remains in Khmer and KHR, foreign-currency entries require a KHR equivalent, records are retained for at least 10 years, and tax calculations require finance review before filing.',
     'settings.acarGuidance': 'ACAR guidance',
     'settings.gdtCambodia': 'GDT Cambodia',
     'settings.budgetAlerts': 'Budget alerts',
-    'settings.budgetAlertsDesc': 'Notify responsible managers at these utilization levels.',
+    'settings.budgetAlertsDesc':
+      'Notify responsible managers at these utilization levels.',
     'settings.warningThreshold': 'Warning threshold (%)',
     'settings.criticalThreshold': 'Critical threshold (%)',
     'settings.approvalReminder': 'Approval reminder',
-    'settings.approvalReminderDesc': 'Escalate requests that remain pending beyond policy.',
+    'settings.approvalReminderDesc':
+      'Escalate requests that remain pending beyond policy.',
     'settings.firstReminder': 'First reminder (hours)',
     'settings.escalation': 'Escalation (hours)',
     'settings.safeguardsEnabled': 'Accounting safeguards remain enabled',
-    'settings.safeguardsDesc': 'Cambodia profile, period locks, audit logs, debit/credit validation, and reversal-only posted entries.',
+    'settings.safeguardsDesc':
+      'Cambodia profile, period locks, audit logs, debit/credit validation, and reversal-only posted entries.',
     'settings.saveReviewed': 'Save reviewed settings',
     'settings.savingProfile': 'Saving reviewed compliance profile…',
-    'settings.savedProfile': 'Cambodia compliance profile saved with an audit trail.',
+    'settings.savedProfile':
+      'Cambodia compliance profile saved with an audit trail.',
     'settings.loadFailed': 'Compliance settings could not be loaded.',
     'settings.saveFailed': 'Compliance settings could not be saved.',
 
     'report.incomeStatement': 'Income statement',
     'report.incomeStatementDesc': 'Revenue, expenses, and net result by period',
-    'report.incomeStatementResult': 'Revenue {revenue}, expenses {expense}, net result {net}.',
+    'report.incomeStatementResult':
+      'Revenue {revenue}, expenses {expense}, net result {net}.',
     'report.cashFlowSummary': 'Cash flow summary',
     'report.cashFlowSummaryDesc': 'Cash inflows, outflows, and ending position',
-    'report.cashFlowResult': 'Inflows {inflow}, outflows {outflow}, ending position {ending}.',
+    'report.cashFlowResult':
+      'Inflows {inflow}, outflows {outflow}, ending position {ending}.',
     'report.arAging': 'AR aging',
     'report.arAgingDesc': 'Open customer invoices grouped by aging bucket',
-    'report.arAgingResult': '{count} open customer invoice{plural} totaling {total}.',
+    'report.arAgingResult':
+      '{count} open customer invoice{plural} totaling {total}.',
     'report.apAging': 'AP aging',
     'report.apAgingDesc': 'Open supplier invoices grouped by aging bucket',
-    'report.apAgingResult': '{count} open supplier bill{plural} totaling {total}.',
+    'report.apAgingResult':
+      '{count} open supplier bill{plural} totaling {total}.',
     'report.revenueReport': 'Revenue report',
-    'report.revenueReportDesc': 'Revenue by customer, department, project, and category',
+    'report.revenueReportDesc':
+      'Revenue by customer, department, project, and category',
     'report.noRevenueYet': 'No revenue recorded yet.',
     'report.expenseReport': 'Expense report',
-    'report.expenseReportDesc': 'Spending by department, project, vendor, and category',
+    'report.expenseReportDesc':
+      'Spending by department, project, vendor, and category',
     'report.noExpensesYet': 'No expenses recorded yet.',
     'report.taxSummary': 'Tax summary',
     'report.taxSummaryDesc': 'Tax collected and paid with source drill-down',
-    'report.taxSummaryResult': '{count} transaction{plural} on record. Configure the VAT rate in Settings to compute tax collected and paid.',
+    'report.taxSummaryResult':
+      '{count} transaction{plural} on record. Configure the VAT rate in Settings to compute tax collected and paid.',
     'report.monthlyPerformance': 'Monthly finance performance',
-    'report.monthlyPerformanceDesc': 'Executive KPI pack with exceptions and risks',
-    'report.monthlyPerformanceResult': 'Net {net} across {count} transactions, {overdue} overdue item{plural}.',
+    'report.monthlyPerformanceDesc':
+      'Executive KPI pack with exceptions and risks',
+    'report.monthlyPerformanceResult':
+      'Net {net} across {count} transactions, {overdue} overdue item{plural}.',
 
     'reports.title': 'Reports',
-    'reports.copy': 'Reconciled management reporting computed from your saved transactions.',
+    'reports.copy':
+      'Reconciled management reporting computed from your saved transactions.',
     'reports.exportHistory': 'Export history',
     'reports.asOf': 'As of {date}',
     'reports.running': 'Running…',
@@ -543,14 +691,16 @@ export const translations: Record<Lang, Record<string, string>> = {
     'reports.loadFailed': 'Transaction data could not be loaded.',
 
     'docs.title': 'Document control',
-    'docs.copy': 'Find every supporting file and resolve missing evidence before posting.',
+    'docs.copy':
+      'Find every supporting file and resolve missing evidence before posting.',
     'docs.uploading': 'Uploading…',
     'docs.uploadDocuments': 'Upload documents',
     'docs.onFile': 'Documents on file',
     'docs.missingEvidence': 'Missing evidence',
     'docs.downloadsAuthorized': 'Downloads authorized',
     'docs.registry': 'Document registry',
-    'docs.registryDesc': 'Private files with checksum, scan, linkage, and access history',
+    'docs.registryDesc':
+      'Private files with checksum, scan, linkage, and access history',
     'docs.searchPlaceholder': 'Search file, record, or counterparty',
     'docs.noneYet': 'No documents uploaded yet.',
     'docs.loadFailed': 'Documents could not be loaded.',
@@ -567,7 +717,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'imp.stepValidate': 'Validate',
     'imp.stepCommit': 'Commit',
     'imp.chooseCsv': 'Choose a CSV file to import',
-    'imp.columnsHint': 'Columns for date, reference, counterparty, department, amount, and type',
+    'imp.columnsHint':
+      'Columns for date, reference, counterparty, department, amount, and type',
     'imp.chooseFile': 'Choose file',
     'imp.notMapped': 'Not mapped',
     'imp.validateRows': 'Validate {count} rows',
@@ -580,32 +731,44 @@ export const translations: Record<Lang, Record<string, string>> = {
     'imp.committing': 'Committing…',
     'imp.commitValidRows': 'Commit valid rows',
     'imp.importCommitted': 'Import committed',
-    'imp.recordsCreated': '{count} record(s) created as Pending transactions for finance review.',
+    'imp.recordsCreated':
+      '{count} record(s) created as Pending transactions for finance review.',
     'imp.missingReference': 'Missing reference number',
     'imp.missingCounterparty': 'Missing counterparty',
     'imp.invalidAmount': 'Invalid or missing amount',
 
-    'scan.chooseOrDrop': 'Choose or drop a receipt, invoice, or payment document.',
-    'scan.takeClearPhoto': 'Take a clear photo of a receipt, invoice, or payment document.',
+    'scan.chooseOrDrop':
+      'Choose or drop a receipt, invoice, or payment document.',
+    'scan.takeClearPhoto':
+      'Take a clear photo of a receipt, invoice, or payment document.',
     'scan.unsupportedFile': 'Unsupported file. Upload a PNG, JPG, or PDF.',
-    'scan.unsupportedCameraImage': 'Unsupported camera image. Please take another photo.',
-    'scan.fileTooLarge': 'File is larger than 20 MB. Choose a smaller document.',
-    'scan.photoTooLarge': 'Photo is larger than 20 MB. Please reduce the camera resolution and try again.',
+    'scan.unsupportedCameraImage':
+      'Unsupported camera image. Please take another photo.',
+    'scan.fileTooLarge':
+      'File is larger than 20 MB. Choose a smaller document.',
+    'scan.photoTooLarge':
+      'Photo is larger than 20 MB. Please reduce the camera resolution and try again.',
     'scan.readyToScan': '{name} is ready to scan.',
     'scan.cameraPhoto': 'Camera photo',
     'scan.cameraPhotoReady': 'Camera photo ready',
-    'scan.noLiveCamera': 'Live camera is not available in this browser. Tap "Open phone camera" below.',
-    'scan.cameraReady': 'Camera ready. Keep the full document inside the frame.',
-    'scan.cameraBlocked': 'Camera access was blocked or unavailable. Allow camera permission, or tap "Open phone camera" below.',
-    'scan.cameraStillStarting': 'The camera is still starting. Wait a moment and try again.',
+    'scan.noLiveCamera':
+      'Live camera is not available in this browser. Tap "Open phone camera" below.',
+    'scan.cameraReady':
+      'Camera ready. Keep the full document inside the frame.',
+    'scan.cameraBlocked':
+      'Camera access was blocked or unavailable. Allow camera permission, or tap "Open phone camera" below.',
+    'scan.cameraStillStarting':
+      'The camera is still starting. Wait a moment and try again.',
     'scan.imageCaptureFailed': 'The camera image could not be captured.',
     'scan.preparingDocument': 'Preparing and enhancing document…',
     'scan.readingPdf': 'Reading PDF pages…',
     'scan.unableToPrepPdfPage': 'Unable to prepare the PDF page.',
     'scan.recognizingLabels': 'Recognizing labels and values…',
     'scan.readingDocumentPercent': 'Reading document… {percent}%',
-    'scan.noTextDetected': 'No readable text was detected. Try a clearer, straight image with good lighting.',
-    'scan.complete': 'Scan complete. Review highlighted values before recording.',
+    'scan.noTextDetected':
+      'No readable text was detected. Try a clearer, straight image with good lighting.',
+    'scan.complete':
+      'Scan complete. Review highlighted values before recording.',
     'scan.couldNotComplete': 'Scan could not be completed.',
     'scan.couldNotScan': 'The document could not be scanned.',
     'scan.takePhotoBeforeScan': 'Take a photo before scanning.',
@@ -622,27 +785,34 @@ export const translations: Record<Lang, Record<string, string>> = {
     'scan.takeAnotherPhoto': 'Take another photo',
     'scan.startCamera': 'Start camera',
     'scan.cameraTipLabel': 'Camera tip:',
-    'scan.cameraTipText': 'Place the full document inside the frame, keep the phone steady, and avoid shadows or glare.',
+    'scan.cameraTipText':
+      'Place the full document inside the frame, keep the phone steady, and avoid shadows or glare.',
     'scan.tapToStartCamera': 'Tap here to start the camera',
-    'scan.thenCapture': 'Then capture the full invoice, receipt, or payment document',
+    'scan.thenCapture':
+      'Then capture the full invoice, receipt, or payment document',
     'scan.openPhoneCamera': 'Open phone camera',
     'scan.documentWord': 'Document',
     'scan.scanning': 'Scanning…',
-    'scan.browserOcrNotice': 'Image cleanup and OCR happen in your browser. No accounting record is created until you review and save it.',
+    'scan.browserOcrNotice':
+      'Image cleanup and OCR happen in your browser. No accounting record is created until you review and save it.',
     'scan.detectedDetails': 'Detected transaction details',
-    'scan.editableNotice': 'All values remain editable and require finance review.',
+    'scan.editableNotice':
+      'All values remain editable and require finance review.',
     'scan.confidencePercent': '{percent}% confidence',
     'scan.reviewNeeded': 'Review needed',
     'scan.viewRecognizedText': 'View recognized text',
     'scan.scanAnotherFile': 'Scan another file',
     'scan.reviewAndRecord': 'Review and record',
-    'scan.warnPartyNotDetected': 'Customer or vendor was not confidently detected.',
+    'scan.warnPartyNotDetected':
+      'Customer or vendor was not confidently detected.',
     'scan.warnReferenceMissing': 'Invoice or receipt number is missing.',
     'scan.warnDateMissing': 'Issue date is missing.',
     'scan.warnDescriptionMissing': 'Description is missing.',
     'scan.warnAmountMissing': 'Total amount is missing.',
-    'scan.warnSubtotalTaxMismatch': 'Subtotal plus tax does not match the detected total.',
-    'scan.warnDefaultedExpense': 'Transaction type defaulted to Expense; confirm before saving.',
+    'scan.warnSubtotalTaxMismatch':
+      'Subtotal plus tax does not match the detected total.',
+    'scan.warnDefaultedExpense':
+      'Transaction type defaulted to Expense; confirm before saving.',
   },
   km: {
     'nav.dashboard': 'ផ្ទាំងគ្រប់គ្រង',
@@ -749,6 +919,34 @@ export const translations: Record<Lang, Record<string, string>> = {
     'tx.breadcrumbFinance': 'ហិរញ្ញវត្ថុ',
     'tx.export': 'នាំចេញ',
     'tx.scanDocument': 'ស្កេនឯកសារ',
+    'tx.uploadFiles': 'ផ្ទុកឯកសារឡើង',
+    'tx.uploadReviewRequired':
+      'ឯកសារបានផ្ទុកឡើង។ សូមបំពេញព័ត៌មានប្រតិបត្តិការ រួចចុចរក្សាទុកកំណត់ត្រារង់ចាំ ដើម្បីបង្កើត record និងភ្ជាប់ឯកសារទាំងនេះ។',
+    'tx.scanUploadedFile': 'អានវិក្កយបត្រ / បង្កាន់ដៃដែលបានផ្ទុក',
+    'tx.continueUploadedRecord': 'បន្តបង្កើត record ពីឯកសារដែលបានផ្ទុក',
+    'tx.uploadedDocumentUnavailable':
+      'រកមិនឃើញឯកសារ ឬមិនមានសិទ្ធិចូលប្រើក្នុង workspace នេះ។',
+    'docs.createRecord': 'បង្កើត record ប្រតិបត្តិការ',
+    'tx.autoTitle': 'បង្កើតប្រតិបត្តិការស្វ័យប្រវត្តិពីឯកសារដែលផ្ទុកឡើង',
+    'tx.autoHint':
+      'មួយប្រតិបត្តិការក្នុងមួយឯកសារ។ ព័ត៌មានវិក្កយបត្រច្បាស់លាស់បង្កើត record រង់ចាំស្វ័យប្រវត្តិ។ ព័ត៌មានខ្វះ ឬមិនច្បាស់ត្រូវពិនិត្យ។ មិនអនុម័ត ឬទូទាត់ស្វ័យប្រវត្តិទេ។',
+    'tx.autoRate': 'អត្រា KHR ក្នុង 1 USD (បើមិនមានលើឯកសារ)',
+    'tx.autoRatePlaceholder': 'ត្រូវការសម្រាប់ឯកសារ USD',
+    'tx.autoProcessing': 'កំពុងអានឯកសារ…',
+    'tx.autoCreateNow': 'បង្កើតស្វ័យប្រវត្តិ',
+    'tx.autoFailed': 'មិនអាចបង្កើតស្វ័យប្រវត្តិ។ សូមពិនិត្យឯកសារដែលបានផ្ទុក។',
+    'tx.autoStatus.created': 'បានបង្កើតប្រតិបត្តិការ',
+    'tx.autoStatus.existing': 'បានកត់ត្រារួច',
+    'tx.autoStatus.duplicate': 'បានទប់កំណត់ត្រាស្ទួន',
+    'tx.autoStatus.needs_review': 'ត្រូវពិនិត្យ',
+    'tx.autoSummary':
+      'បានបង្កើត {created} record · ត្រូវពិនិត្យ {review} · បានកត់ត្រារួច {duplicates}។',
+    'tx.uploadTransportSize': 'ឯកសារធំពេកសម្រាប់សំណើនេះ។ សូមប្រើឯកសារតូចជាង 3 MB។',
+    'tx.attachFiles': 'ភ្ជាប់ឯកសារ',
+    'tx.uploadHint':
+      'ផ្ទុកឯកសារ ពិនិត្យព័ត៌មានប្រតិបត្តិការ រួចរក្សាទុក record។ ប្រើភ្ជាប់ឯកសារ ដើម្បីបន្ថែមភស្តុតាងទៅ record ដែលមានស្រាប់។',
+    'tx.uploadSizeError': '{name}៖ សូមជ្រើសឯកសារដែលមិនទទេ និងមានទំហំមិនលើស 8 MB។',
+    'tx.uploadLinkFailed': '{name} បានផ្ទុកឡើង ប៉ុន្តែមិនអាចភ្ជាប់បានទេ។ សូមភ្ជាប់ក្នុងផ្នែកឯកសារ។',
     'tx.scanDocumentTitle': 'ផ្ទុកឡើង ឬទម្លាក់ឯកសារ PNG, JPG ឬ PDF',
     'tx.ocrImport': 'នាំចូលដោយ OCR',
     'tx.ocrImportTitle': 'ថតឯកសារដោយប្រើទូរស័ព្ទ ឬកាមេរ៉ាផ្ទាល់',
@@ -765,17 +963,20 @@ export const translations: Record<Lang, Record<string, string>> = {
     'tx.custom': 'តាមបំណង',
     'tx.from': 'ពី',
     'tx.to': 'ដល់',
-    'tx.dateHelp': 'ខែបច្ចុប្បន្នត្រូវបានជ្រើសរើសដោយស្វ័យប្រវត្តិ។ កាលបរិច្ឆេទអាចប្រើបានដល់ថ្ងៃទី៣១ ខែធ្នូ ឆ្នាំ២០៣០។',
+    'tx.dateHelp':
+      'ខែបច្ចុប្បន្នត្រូវបានជ្រើសរើសដោយស្វ័យប្រវត្តិ។ កាលបរិច្ឆេទអាចប្រើបានដល់ថ្ងៃទី៣១ ខែធ្នូ ឆ្នាំ២០៣០។',
     'tx.department': 'នាយកដ្ឋាន',
     'tx.resetFilters': 'កំណត់តម្រងឡើងវិញ',
     'tx.loading': 'កំពុងផ្ទុកប្រតិបត្តិការ…',
     'tx.countTransactions': 'ប្រតិបត្តិការ {count}',
     'tx.financeRegister': 'បញ្ជីហិរញ្ញវត្ថុ',
     'tx.emptyNoneTitle': 'មិនមានប្រតិបត្តិការនៅក្នុងបញ្ជីនេះទេ',
-    'tx.emptyScopeMismatchTitle': 'រកឃើញប្រតិបត្តិការ {count} ដែលបានរក្សាទុកនៅខាងក្រៅ {type}',
+    'tx.emptyScopeMismatchTitle':
+      'រកឃើញប្រតិបត្តិការ {count} ដែលបានរក្សាទុកនៅខាងក្រៅ {type}',
     'tx.emptyNoMatchTitle': 'មិនមានប្រតិបត្តិការត្រូវគ្នា',
     'tx.emptyNoneCopy': 'បង្កើត ស្កេន ឬនាំចូលប្រតិបត្តិការដោយ OCR។',
-    'tx.emptyScopeMismatchCopy': 'បើកប្រតិបត្តិការទាំងអស់ ដើម្បីពិនិត្យកំណត់ត្រា និងប្រភេទប្រតិបត្តិការទាំងនោះ។',
+    'tx.emptyScopeMismatchCopy':
+      'បើកប្រតិបត្តិការទាំងអស់ ដើម្បីពិនិត្យកំណត់ត្រា និងប្រភេទប្រតិបត្តិការទាំងនោះ។',
     'tx.emptyNoMatchCopy': 'កែប្រែ ឬលុបតម្រងដែលកំពុងប្រើ។',
     'tx.viewAllTransactions': 'មើលប្រតិបត្តិការទាំងអស់',
     'tx.clearFilters': 'លុបតម្រង',
@@ -793,7 +994,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'tx.editTitle': 'កែប្រែ {id}',
     'tx.reviewTransaction': 'ពិនិត្យប្រតិបត្តិការ',
     'tx.editSubtitle': 'ការផ្លាស់ប្តូរនឹងបញ្ជូនកំណត់ត្រាទៅការពិនិត្យឡើងវិញ ហើយនៅតែអាចតាមដានបាន។',
-    'tx.newSubtitle': 'បញ្ជាក់តម្លៃដែលបានស្កេន។ ការរក្សាទុកនឹងបង្កើតកំណត់ត្រាកំពុងរង់ចាំសម្រាប់ការត្រួតពិនិត្យ។',
+    'tx.newSubtitle':
+      'បញ្ជាក់តម្លៃដែលបានស្កេន។ ការរក្សាទុកនឹងបង្កើតកំណត់ត្រាកំពុងរង់ចាំសម្រាប់ការត្រួតពិនិត្យ។',
     'tx.cancel': 'បោះបង់',
     'tx.saving': 'កំពុងរក្សាទុក…',
     'tx.saveChanges': 'រក្សាទុកការផ្លាស់ប្តូរសម្រាប់ការត្រួតពិនិត្យ',
@@ -801,17 +1003,20 @@ export const translations: Record<Lang, Record<string, string>> = {
     'tx.delete': 'លុប',
     'tx.deleteTransaction': 'លុបប្រតិបត្តិការ',
     'tx.deleteConfirmTitle': 'លុប {id}?',
-    'tx.deleteConfirmDesc': 'នេះនឹងលុបប្រតិបត្តិការចេញពីកំណត់ត្រាសកម្មរបស់អ្នក។ សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ។',
+    'tx.deleteConfirmDesc':
+      'នេះនឹងលុបប្រតិបត្តិការចេញពីកំណត់ត្រាសកម្មរបស់អ្នក។ សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ។',
     'tx.deleting': 'កំពុងលុប…',
     'tx.deleteFailed': 'មិនអាចលុបប្រតិបត្តិការបានទេ។',
     'tx.deletedNotice': '{id} ត្រូវបានលុប។',
-    'tx.noticeValidation': 'សូមបំពេញអតិថិជន/អ្នកផ្គត់ផ្គង់ ឯកសារយោង កាលបរិច្ឆេទចេញ ការពិពណ៌នា ប្រភេទ ចំនួនទឹកប្រាក់ និងអត្រាប្តូរប្រាក់ KHR។',
+    'tx.noticeValidation':
+      'សូមបំពេញអតិថិជន/អ្នកផ្គត់ផ្គង់ ឯកសារយោង កាលបរិច្ឆេទចេញ ការពិពណ៌នា ប្រភេទ ចំនួនទឹកប្រាក់ និងអត្រាប្តូរប្រាក់ KHR។',
     'tx.noticeSaving': 'កំពុងរក្សាទុកប្រតិបត្តិការ…',
     'tx.noticeUpdated': '{id} ត្រូវបានធ្វើបច្ចុប្បន្នភាព និងបញ្ជូនត្រឡប់ទៅការពិនិត្យឡើងវិញ។',
     'tx.noticeSaved': '{id} ត្រូវបានរក្សាទុកជាអចិន្ត្រៃយ៍ជាកំពុងរង់ចាំ។',
     'tx.noticeSaveFailed': 'មិនអាចរក្សាទុកប្រតិបត្តិការបានទេ។',
     'tx.noticeLoadFailed': 'មិនអាចផ្ទុកប្រតិបត្តិការបានទេ។',
-    'tx.noticeScanApplied': 'ប្រអប់ដែលបានស្កេនត្រូវបានបំពេញស្វ័យប្រវត្តិ។ សូមបញ្ជាក់របៀបគិតអាករកម្ពុជា និងអត្រាប្តូរប្រាក់ KHR មុនពេលរក្សាទុក។',
+    'tx.noticeScanApplied':
+      'ប្រអប់ដែលបានស្កេនត្រូវបានបំពេញស្វ័យប្រវត្តិ។ សូមបញ្ជាក់របៀបគិតអាករកម្ពុជា និងអត្រាប្តូរប្រាក់ KHR មុនពេលរក្សាទុក។',
 
     'field.reference': 'ឯកសារយោង',
     'field.issueDate': 'កាលបរិច្ឆេទចេញ',
@@ -837,7 +1042,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'field.account': 'គណនី',
 
     'journals.title': 'សៀវភៅកត់ត្រាពិសេស',
-    'journals.copy': 'ប្រតិបត្តិការបានចាត់ថ្នាក់ទៅក្នុងសៀវភៅកត់ត្រាពិសេសសម្រាប់អ្នកបង់ពន្ធខ្នាតតូចតាម GDT កម្ពុជា — មួយធាតុក្នុងមួយប្រតិបត្តិការ មិនតម្រូវឲ្យកត់ត្រាពីរផ្នែកទេ។',
+    'journals.copy':
+      'ប្រតិបត្តិការបានចាត់ថ្នាក់ទៅក្នុងសៀវភៅកត់ត្រាពិសេសសម្រាប់អ្នកបង់ពន្ធខ្នាតតូចតាម GDT កម្ពុជា — មួយធាតុក្នុងមួយប្រតិបត្តិការ មិនតម្រូវឲ្យកត់ត្រាពីរផ្នែកទេ។',
     'journals.tabSummary': 'សេចក្តីសង្ខេប',
     'journals.date': 'កាលបរិច្ឆេទ',
     'journals.entries': 'ធាតុ {count}',
@@ -864,7 +1070,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'ledger.receivablesTitle': 'គណនីត្រូវទទួល',
     'ledger.payablesTitle': 'គណនីត្រូវសង',
     'ledger.receivablesCopy': 'ប្រមូលលឿនជាងមុន និងតាមដានការទំនាក់ទំនងអតិថិជនគ្រប់រូប។',
-    'ledger.payablesCopy': 'រៀបចំផែនការទូទាត់ប្រាក់ទៅអ្នកផ្គត់ផ្គង់ និងការពារហានិភ័យពន្យាពេលទូទាត់។',
+    'ledger.payablesCopy':
+      'រៀបចំផែនការទូទាត់ប្រាក់ទៅអ្នកផ្គត់ផ្គង់ និងការពារហានិភ័យពន្យាពេលទូទាត់។',
     'ledger.newInvoice': 'វិក្កយបត្រថ្មី',
     'ledger.recordBill': 'កត់ត្រាវិក្កយបត្រ',
     'ledger.outstanding': 'នៅជំពាក់',
@@ -895,7 +1102,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'ledger.days60plus': '៦០+ ថ្ងៃ',
     'ledger.collectionQueue': 'ជួរប្រមូលប្រាក់',
     'ledger.paymentCalendar': 'ប្រតិទិនទូទាត់',
-    'ledger.overdueInvoicesNeedFollowUp': 'វិក្កយបត្រហួសកាលកំណត់ {count} ត្រូវការការតាមដាន',
+    'ledger.overdueInvoicesNeedFollowUp':
+      'វិក្កយបត្រហួសកាលកំណត់ {count} ត្រូវការការតាមដាន',
     'ledger.paymentsDueWithin7': 'ការទូទាត់ {count} ត្រូវសងក្នុង៧ថ្ងៃ',
     'ledger.customersOverdue': 'អតិថិជន {count} ហួសកាលកំណត់',
     'ledger.paymentsDueThisWeek': 'ការទូទាត់ {count} ត្រូវសងសប្តាហ៍នេះ',
@@ -958,7 +1166,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'appr.noneWaitingCopy': 'ប្រតិបត្តិការថ្មី ឬបានកែប្រែនឹងបង្ហាញនៅទីនេះសម្រាប់ការពិនិត្យ។',
     'appr.loadingApprovals': 'កំពុងផ្ទុកការអនុម័តដែលបានរក្សាទុក…',
     'appr.savingApproval': 'កំពុងរក្សាទុកការអនុម័ត…',
-    'appr.approvedNotice': '{id} ត្រូវបានអនុម័ត។ ការសម្រេចចិត្តត្រូវបានរក្សាទុកជាមួយដានសវនកម្ម។',
+    'appr.approvedNotice':
+      '{id} ត្រូវបានអនុម័ត។ ការសម្រេចចិត្តត្រូវបានរក្សាទុកជាមួយដានសវនកម្ម។',
     'appr.loadFailed': 'មិនអាចផ្ទុកការអនុម័តបានទេ។',
     'appr.saveFailed': 'មិនអាចរក្សាទុកការអនុម័តបានទេ។',
 
@@ -974,7 +1183,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'asst.copy': 'សួរសំណួរបានតែលើកំណត់ត្រាដែលតួនាទីបច្ចុប្បន្នរបស់អ្នកមានសិទ្ធិមើល។',
     'asst.askLedgerFlow': 'សួរ LedgerFlow',
     'asst.readOnly': 'ការវិភាគសម្រាប់អានតែប៉ុណ្ណោះ · គ្មានសិទ្ធិកត់ត្រា ឬអនុម័ត',
-    'asst.tryPrompt': 'សាកល្បង៖ "នាយកដ្ឋានមួយណាលើសថវិកា?" ឬ "ការទូទាត់អ្វីខ្លះត្រូវសងសប្តាហ៍ក្រោយ?"',
+    'asst.tryPrompt':
+      'សាកល្បង៖ "នាយកដ្ឋានមួយណាលើសថវិកា?" ឬ "ការទូទាត់អ្វីខ្លះត្រូវសងសប្តាហ៍ក្រោយ?"',
     'asst.aiAnswer': 'ចម្លើយ AI ផ្អែកលើទិន្នន័យហិរញ្ញវត្ថុរបស់អ្នក',
     'asst.rulesAnswer': 'ចម្លើយពីទិន្នន័យហិរញ្ញវត្ថុដែលមានការអនុញ្ញាត',
     'asst.you': 'អ្នក',
@@ -983,21 +1193,25 @@ export const translations: Record<Lang, Record<string, string>> = {
     'asst.clearChat': 'សម្អាតការសន្ទនា',
     'asst.noOverdueInvoices': 'បច្ចុប្បន្នមិនមានវិក្កយបត្រអតិថិជនហួសកាលកំណត់ទេ។',
     'asst.owesTemplate': '{party} ជំពាក់ {amount}',
-    'asst.overdueSummary': 'អតិថិជន {count} ហួសកាលកំណត់៖ {list}។ សរុបហួសកាលកំណត់៖ {total}។',
+    'asst.overdueSummary':
+      'អតិថិជន {count} ហួសកាលកំណត់៖ {list}។ សរុបហួសកាលកំណត់៖ {total}។',
     'asst.noBudgetsConfigured': 'មិនទាន់មានការកំណត់ថវិកានាយកដ្ឋានទេ។ សូមកំណត់នៅទំព័រថវិកា។',
     'asst.noneOverBudget': 'គ្មាននាយកដ្ឋានណាលើសថវិកាទេ។ អត្រាប្រើប្រាស់ខ្ពស់បំផុត៖ {detail}។',
     'asst.atPercentOfBudget': '{department} នៅ {percent}%',
     'asst.naDetail': 'មិនមាន',
     'asst.overBudgetItem': '{department} កំពុងស្ថិតនៅ {percent}% នៃថវិកា {limit}',
     'asst.noSupplierPaymentsDue': 'មិនមានការទូទាត់ទៅអ្នកផ្គត់ផ្គង់ត្រូវសងក្នុង៧ថ្ងៃខាងមុខទេ។',
-    'asst.paymentsDueSummary': 'ការទូទាត់ {count} ត្រូវសងក្នុង៧ថ្ងៃ សរុប {total}៖ {list}។',
-    'asst.monthlySummary': 'ផ្អែកលើកំណត់ត្រាដែលអាចប្រើបានចំពោះតួនាទីរបស់អ្នក ចំណូលខែនេះគឺ {revenue} ចំណាយគឺ {expenses} និងលទ្ធផលសុទ្ធគឺ {net}។',
+    'asst.paymentsDueSummary':
+      'ការទូទាត់ {count} ត្រូវសងក្នុង៧ថ្ងៃ សរុប {total}៖ {list}។',
+    'asst.monthlySummary':
+      'ផ្អែកលើកំណត់ត្រាដែលអាចប្រើបានចំពោះតួនាទីរបស់អ្នក ចំណូលខែនេះគឺ {revenue} ចំណាយគឺ {expenses} និងលទ្ធផលសុទ្ធគឺ {net}។',
     'asst.unknown': 'មិនស្គាល់',
 
     'settings.title': 'ការត្រួតពិនិត្យហិរញ្ញវត្ថុ',
     'settings.copy': 'កំណត់រចនាសម្ព័ន្ធការការពារផ្នែកគណនេយ្យ ពន្ធ ការអនុម័ត និងស្វ័យប្រវត្តិកម្ម។',
     'settings.profileTitle': 'ទម្រង់គណនេយ្យ និងពន្ធកម្ពុជា',
-    'settings.profileDesc': 'ការត្រួតពិនិត្យតាមច្បាប់ដោយផ្អែកលើតម្រូវការ ACAR និងការណែនាំពីអគ្គនាយកដ្ឋានពន្ធដារ។ សូមបញ្ជាក់ការចាត់ថ្នាក់អង្គភាពជាមួយគណនេយ្យករ ឬទីប្រឹក្សាពន្ធកម្ពុជារបស់អ្នក។',
+    'settings.profileDesc':
+      'ការត្រួតពិនិត្យតាមច្បាប់ដោយផ្អែកលើតម្រូវការ ACAR និងការណែនាំពីអគ្គនាយកដ្ឋានពន្ធដារ។ សូមបញ្ជាក់ការចាត់ថ្នាក់អង្គភាពជាមួយគណនេយ្យករ ឬទីប្រឹក្សាពន្ធកម្ពុជារបស់អ្នក។',
     'settings.reportingFramework': 'ក្របខ័ណ្ឌរបាយការណ៍',
     'settings.gdtClassification': 'ការចាត់ថ្នាក់អ្នកបង់ពន្ធ GDT',
     'settings.gdtFilingMethod': 'វិធីសាស្ត្របញ្ជូនរបាយការណ៍ GDT',
@@ -1009,7 +1223,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'settings.fiscalYearValue': 'មករា–ធ្នូ',
     'settings.retention': 'រយៈពេលរក្សាទុកកំណត់ត្រា (ឆ្នាំ)',
     'settings.requiredControls': 'ការត្រួតពិនិត្យចាំបាច់',
-    'settings.requiredControlsDesc': 'រាល់ការកត់ត្រាត្រូវការឯកសារយោងត្រឹមត្រូវ។ របាយការណ៍តាមផ្លូវច្បាប់នៅតែជាភាសាខ្មែរ និងជារូបិយប័ណ្ណរៀល ការកត់ត្រារូបិយប័ណ្ណបរទេសត្រូវការតម្លៃស្មើគ្នាជារៀល កំណត់ត្រាត្រូវរក្សាទុកយ៉ាងតិច១០ឆ្នាំ ហើយការគណនាពន្ធត្រូវការការត្រួតពិនិត្យពីផ្នែកហិរញ្ញវត្ថុមុនពេលដាក់ស្នើ។',
+    'settings.requiredControlsDesc':
+      'រាល់ការកត់ត្រាត្រូវការឯកសារយោងត្រឹមត្រូវ។ របាយការណ៍តាមផ្លូវច្បាប់នៅតែជាភាសាខ្មែរ និងជារូបិយប័ណ្ណរៀល ការកត់ត្រារូបិយប័ណ្ណបរទេសត្រូវការតម្លៃស្មើគ្នាជារៀល កំណត់ត្រាត្រូវរក្សាទុកយ៉ាងតិច១០ឆ្នាំ ហើយការគណនាពន្ធត្រូវការការត្រួតពិនិត្យពីផ្នែកហិរញ្ញវត្ថុមុនពេលដាក់ស្នើ។',
     'settings.acarGuidance': 'ការណែនាំ ACAR',
     'settings.gdtCambodia': 'អគ្គនាយកដ្ឋានពន្ធដារកម្ពុជា',
     'settings.budgetAlerts': 'ការជូនដំណឹងថវិកា',
@@ -1017,11 +1232,13 @@ export const translations: Record<Lang, Record<string, string>> = {
     'settings.warningThreshold': 'កម្រិតព្រមាន (%)',
     'settings.criticalThreshold': 'កម្រិតធ្ងន់ធ្ងរ (%)',
     'settings.approvalReminder': 'ការរំលឹកអនុម័ត',
-    'settings.approvalReminderDesc': 'ដាក់សំណើទៅកម្រិតខ្ពស់ជាងសម្រាប់សំណើនៅតែកំពុងរង់ចាំហួសគោលការណ៍។',
+    'settings.approvalReminderDesc':
+      'ដាក់សំណើទៅកម្រិតខ្ពស់ជាងសម្រាប់សំណើនៅតែកំពុងរង់ចាំហួសគោលការណ៍។',
     'settings.firstReminder': 'ការរំលឹកលើកដំបូង (ម៉ោង)',
     'settings.escalation': 'ការដាក់កម្រិតខ្ពស់ (ម៉ោង)',
     'settings.safeguardsEnabled': 'ការការពារគណនេយ្យនៅតែបើកដំណើរការ',
-    'settings.safeguardsDesc': 'ទម្រង់កម្ពុជា ការចាក់សោរយៈពេល កំណត់ត្រាសវនកម្ម ការផ្ទៀងផ្ទាត់ឥណពន្ធ/ឥណទាន និងធាតុដែលបានកត់ត្រាអាចត្រឡប់វិញបានតែប៉ុណ្ណោះ។',
+    'settings.safeguardsDesc':
+      'ទម្រង់កម្ពុជា ការចាក់សោរយៈពេល កំណត់ត្រាសវនកម្ម ការផ្ទៀងផ្ទាត់ឥណពន្ធ/ឥណទាន និងធាតុដែលបានកត់ត្រាអាចត្រឡប់វិញបានតែប៉ុណ្ណោះ។',
     'settings.saveReviewed': 'រក្សាទុកការកំណត់ដែលបានពិនិត្យ',
     'settings.savingProfile': 'កំពុងរក្សាទុកទម្រង់អនុលោមភាពដែលបានពិនិត្យ…',
     'settings.savedProfile': 'ទម្រង់អនុលោមភាពកម្ពុជាត្រូវបានរក្សាទុកជាមួយដានសវនកម្ម។',
@@ -1030,10 +1247,12 @@ export const translations: Record<Lang, Record<string, string>> = {
 
     'report.incomeStatement': 'របាយការណ៍ចំណូល',
     'report.incomeStatementDesc': 'ចំណូល ចំណាយ និងលទ្ធផលសុទ្ធតាមរយៈពេល',
-    'report.incomeStatementResult': 'ចំណូល {revenue} ចំណាយ {expense} លទ្ធផលសុទ្ធ {net}។',
+    'report.incomeStatementResult':
+      'ចំណូល {revenue} ចំណាយ {expense} លទ្ធផលសុទ្ធ {net}។',
     'report.cashFlowSummary': 'សេចក្តីសង្ខេបលំហូរសាច់ប្រាក់',
     'report.cashFlowSummaryDesc': 'លំហូរចូល ចេញ និងតុល្យភាពចុងក្រោយ',
-    'report.cashFlowResult': 'លំហូរចូល {inflow} លំហូរចេញ {outflow} តុល្យភាពចុងក្រោយ {ending}។',
+    'report.cashFlowResult':
+      'លំហូរចូល {inflow} លំហូរចេញ {outflow} តុល្យភាពចុងក្រោយ {ending}។',
     'report.arAging': 'អាយុគណនីត្រូវទទួល',
     'report.arAgingDesc': 'វិក្កយបត្រអតិថិជនបើកបានដាក់ជាក្រុមតាមអាយុកាល',
     'report.arAgingResult': 'វិក្កយបត្រអតិថិជនបើក {count} សរុប {total}។',
@@ -1048,10 +1267,13 @@ export const translations: Record<Lang, Record<string, string>> = {
     'report.noExpensesYet': 'មិនទាន់មានចំណាយបានកត់ត្រាទេ។',
     'report.taxSummary': 'សេចក្តីសង្ខេបពន្ធ',
     'report.taxSummaryDesc': 'ពន្ធប្រមូល និងបានបង់ជាមួយការពិនិត្យលម្អិតប្រភព',
-    'report.taxSummaryResult': 'ប្រតិបត្តិការ {count} ត្រូវបានកត់ត្រា។ សូមកំណត់អត្រាអាករនៅក្នុងការកំណត់ ដើម្បីគណនាពន្ធប្រមូល និងបានបង់។',
+    'report.taxSummaryResult':
+      'ប្រតិបត្តិការ {count} ត្រូវបានកត់ត្រា។ សូមកំណត់អត្រាអាករនៅក្នុងការកំណត់ ដើម្បីគណនាពន្ធប្រមូល និងបានបង់។',
     'report.monthlyPerformance': 'សមិទ្ធផលហិរញ្ញវត្ថុប្រចាំខែ',
-    'report.monthlyPerformanceDesc': 'កញ្ចប់ KPI សម្រាប់អ្នកគ្រប់គ្រងជាមួយករណីលើកលែង និងហានិភ័យ',
-    'report.monthlyPerformanceResult': 'សុទ្ធ {net} ក្នុងចំណោមប្រតិបត្តិការ {count} ធាតុហួសកាលកំណត់ {overdue}។',
+    'report.monthlyPerformanceDesc':
+      'កញ្ចប់ KPI សម្រាប់អ្នកគ្រប់គ្រងជាមួយករណីលើកលែង និងហានិភ័យ',
+    'report.monthlyPerformanceResult':
+      'សុទ្ធ {net} ក្នុងចំណោមប្រតិបត្តិការ {count} ធាតុហួសកាលកំណត់ {overdue}។',
 
     'reports.title': 'របាយការណ៍',
     'reports.copy': 'របាយការណ៍គ្រប់គ្រងបានផ្ទៀងផ្ទាត់ គណនាពីប្រតិបត្តិការដែលបានរក្សាទុករបស់អ្នក។',
@@ -1087,7 +1309,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'imp.stepValidate': 'ផ្ទៀងផ្ទាត់',
     'imp.stepCommit': 'បញ្ជូន',
     'imp.chooseCsv': 'ជ្រើសរើសឯកសារ CSV ដើម្បីនាំចូល',
-    'imp.columnsHint': 'ជួរឈរសម្រាប់កាលបរិច្ឆេទ ឯកសារយោង ដៃគូ នាយកដ្ឋាន ចំនួនទឹកប្រាក់ និងប្រភេទ',
+    'imp.columnsHint':
+      'ជួរឈរសម្រាប់កាលបរិច្ឆេទ ឯកសារយោង ដៃគូ នាយកដ្ឋាន ចំនួនទឹកប្រាក់ និងប្រភេទ',
     'imp.chooseFile': 'ជ្រើសរើសឯកសារ',
     'imp.notMapped': 'មិនទាន់ផ្គូផ្គង',
     'imp.validateRows': 'ផ្ទៀងផ្ទាត់ជួរដេក {count}',
@@ -1100,7 +1323,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'imp.committing': 'កំពុងបញ្ជូន…',
     'imp.commitValidRows': 'បញ្ជូនជួរដេកត្រឹមត្រូវ',
     'imp.importCommitted': 'បាននាំចូលរួចរាល់',
-    'imp.recordsCreated': 'កំណត់ត្រា {count} ត្រូវបានបង្កើតជាប្រតិបត្តិការកំពុងរង់ចាំសម្រាប់ការត្រួតពិនិត្យ។',
+    'imp.recordsCreated':
+      'កំណត់ត្រា {count} ត្រូវបានបង្កើតជាប្រតិបត្តិការកំពុងរង់ចាំសម្រាប់ការត្រួតពិនិត្យ។',
     'imp.missingReference': 'ខ្វះលេខឯកសារយោង',
     'imp.missingCounterparty': 'ខ្វះដៃគូអាជីវកម្ម',
     'imp.invalidAmount': 'ចំនួនទឹកប្រាក់មិនត្រឹមត្រូវ ឬខ្វះ',
@@ -1110,21 +1334,26 @@ export const translations: Record<Lang, Record<string, string>> = {
     'scan.unsupportedFile': 'ឯកសារមិនគាំទ្រ។ សូមផ្ទុកឡើងឯកសារ PNG, JPG ឬ PDF។',
     'scan.unsupportedCameraImage': 'រូបភាពកាមេរ៉ាមិនគាំទ្រ។ សូមថតរូបម្តងទៀត។',
     'scan.fileTooLarge': 'ឯកសារធំជាង ២០ មេកាបៃ។ សូមជ្រើសរើសឯកសារតូចជាងនេះ។',
-    'scan.photoTooLarge': 'រូបថតធំជាង ២០ មេកាបៃ។ សូមកាត់បន្ថយគុណភាពកាមេរ៉ា ហើយសាកល្បងម្តងទៀត។',
+    'scan.photoTooLarge':
+      'រូបថតធំជាង ២០ មេកាបៃ។ សូមកាត់បន្ថយគុណភាពកាមេរ៉ា ហើយសាកល្បងម្តងទៀត។',
     'scan.readyToScan': '{name} បានត្រៀមរួចរាល់សម្រាប់ស្កេន។',
     'scan.cameraPhoto': 'រូបថតកាមេរ៉ា',
     'scan.cameraPhotoReady': 'រូបថតកាមេរ៉ាត្រៀមរួចរាល់',
-    'scan.noLiveCamera': 'កាមេរ៉ាផ្ទាល់មិនអាចប្រើបាននៅក្នុងកម្មវិធីរុករកនេះទេ។ សូមចុច "បើកកាមេរ៉ាទូរស័ព្ទ" ខាងក្រោម។',
+    'scan.noLiveCamera':
+      'កាមេរ៉ាផ្ទាល់មិនអាចប្រើបាននៅក្នុងកម្មវិធីរុករកនេះទេ។ សូមចុច "បើកកាមេរ៉ាទូរស័ព្ទ" ខាងក្រោម។',
     'scan.cameraReady': 'កាមេរ៉ាត្រៀមរួចរាល់។ រក្សាឯកសារទាំងមូលនៅក្នុងស៊ុម។',
-    'scan.cameraBlocked': 'ការចូលប្រើកាមេរ៉ាត្រូវបានទប់ស្កាត់ ឬមិនអាចប្រើបាន។ សូមអនុញ្ញាតសិទ្ធិកាមេរ៉ា ឬចុច "បើកកាមេរ៉ាទូរស័ព្ទ" ខាងក្រោម។',
-    'scan.cameraStillStarting': 'កាមេរ៉ានៅតែកំពុងចាប់ផ្តើម។ សូមរង់ចាំមួយភ្លែត ហើយសាកល្បងម្តងទៀត។',
+    'scan.cameraBlocked':
+      'ការចូលប្រើកាមេរ៉ាត្រូវបានទប់ស្កាត់ ឬមិនអាចប្រើបាន។ សូមអនុញ្ញាតសិទ្ធិកាមេរ៉ា ឬចុច "បើកកាមេរ៉ាទូរស័ព្ទ" ខាងក្រោម។',
+    'scan.cameraStillStarting':
+      'កាមេរ៉ានៅតែកំពុងចាប់ផ្តើម។ សូមរង់ចាំមួយភ្លែត ហើយសាកល្បងម្តងទៀត។',
     'scan.imageCaptureFailed': 'មិនអាចថតរូបភាពកាមេរ៉ាបានទេ។',
     'scan.preparingDocument': 'កំពុងរៀបចំ និងបង្កើនគុណភាពឯកសារ…',
     'scan.readingPdf': 'កំពុងអានទំព័រ PDF…',
     'scan.unableToPrepPdfPage': 'មិនអាចរៀបចំទំព័រ PDF បានទេ។',
     'scan.recognizingLabels': 'កំពុងសម្គាល់ស្លាក និងតម្លៃ…',
     'scan.readingDocumentPercent': 'កំពុងអានឯកសារ… {percent}%',
-    'scan.noTextDetected': 'រកមិនឃើញអក្សរដែលអានបាន។ សូមសាកល្បងរូបភាពច្បាស់ ត្រង់ និងមានពន្លឺគ្រប់គ្រាន់។',
+    'scan.noTextDetected':
+      'រកមិនឃើញអក្សរដែលអានបាន។ សូមសាកល្បងរូបភាពច្បាស់ ត្រង់ និងមានពន្លឺគ្រប់គ្រាន់។',
     'scan.complete': 'ស្កេនរួចរាល់។ សូមពិនិត្យតម្លៃដែលបានបន្លិចមុនពេលកត់ត្រា។',
     'scan.couldNotComplete': 'មិនអាចបញ្ចប់ការស្កេនបានទេ។',
     'scan.couldNotScan': 'មិនអាចស្កេនឯកសារបានទេ។',
@@ -1142,15 +1371,18 @@ export const translations: Record<Lang, Record<string, string>> = {
     'scan.takeAnotherPhoto': 'ថតរូបម្តងទៀត',
     'scan.startCamera': 'ចាប់ផ្តើមកាមេរ៉ា',
     'scan.cameraTipLabel': 'គន្លឹះកាមេរ៉ា៖',
-    'scan.cameraTipText': 'ដាក់ឯកសារទាំងមូលនៅក្នុងស៊ុម រក្សាទូរស័ព្ទឲ្យនឹង និងជៀសវាងស្រមោល ឬពន្លឺចាំង។',
+    'scan.cameraTipText':
+      'ដាក់ឯកសារទាំងមូលនៅក្នុងស៊ុម រក្សាទូរស័ព្ទឲ្យនឹង និងជៀសវាងស្រមោល ឬពន្លឺចាំង។',
     'scan.tapToStartCamera': 'ចុចទីនេះដើម្បីចាប់ផ្តើមកាមេរ៉ា',
     'scan.thenCapture': 'បន្ទាប់មកថតវិក្កយបត្រ បង្កាន់ដៃ ឬឯកសារទូទាត់ទាំងមូល',
     'scan.openPhoneCamera': 'បើកកាមេរ៉ាទូរស័ព្ទ',
     'scan.documentWord': 'ឯកសារ',
     'scan.scanning': 'កំពុងស្កេន…',
-    'scan.browserOcrNotice': 'ការសម្អាតរូបភាព និង OCR កើតឡើងនៅក្នុងកម្មវិធីរុករករបស់អ្នក។ គ្មានកំណត់ត្រាគណនេយ្យត្រូវបានបង្កើតទេ រហូតដល់អ្នកពិនិត្យ និងរក្សាទុកវា។',
+    'scan.browserOcrNotice':
+      'ការសម្អាតរូបភាព និង OCR កើតឡើងនៅក្នុងកម្មវិធីរុករករបស់អ្នក។ គ្មានកំណត់ត្រាគណនេយ្យត្រូវបានបង្កើតទេ រហូតដល់អ្នកពិនិត្យ និងរក្សាទុកវា។',
     'scan.detectedDetails': 'ព័ត៌មានលម្អិតប្រតិបត្តិការដែលបានរកឃើញ',
-    'scan.editableNotice': 'តម្លៃទាំងអស់នៅតែអាចកែប្រែបាន និងត្រូវការការត្រួតពិនិត្យពីផ្នែកហិរញ្ញវត្ថុ។',
+    'scan.editableNotice':
+      'តម្លៃទាំងអស់នៅតែអាចកែប្រែបាន និងត្រូវការការត្រួតពិនិត្យពីផ្នែកហិរញ្ញវត្ថុ។',
     'scan.confidencePercent': 'ភាពជឿជាក់ {percent}%',
     'scan.reviewNeeded': 'ត្រូវការការពិនិត្យ',
     'scan.viewRecognizedText': 'មើលអក្សរដែលបានសម្គាល់',
@@ -1161,7 +1393,9 @@ export const translations: Record<Lang, Record<string, string>> = {
     'scan.warnDateMissing': 'ខ្វះកាលបរិច្ឆេទចេញ។',
     'scan.warnDescriptionMissing': 'ខ្វះការពិពណ៌នា។',
     'scan.warnAmountMissing': 'ខ្វះចំនួនទឹកប្រាក់សរុប។',
-    'scan.warnSubtotalTaxMismatch': 'សរុបរង បូកនឹងពន្ធ មិនត្រូវគ្នានឹងចំនួនសរុបដែលបានរកឃើញទេ។',
-    'scan.warnDefaultedExpense': 'ប្រភេទប្រតិបត្តិការត្រូវបានកំណត់ជាលំនាំដើមទៅជាចំណាយ សូមបញ្ជាក់មុនពេលរក្សាទុក។',
+    'scan.warnSubtotalTaxMismatch':
+      'សរុបរង បូកនឹងពន្ធ មិនត្រូវគ្នានឹងចំនួនសរុបដែលបានរកឃើញទេ។',
+    'scan.warnDefaultedExpense':
+      'ប្រភេទប្រតិបត្តិការត្រូវបានកំណត់ជាលំនាំដើមទៅជាចំណាយ សូមបញ្ជាក់មុនពេលរក្សាទុក។',
   },
 };

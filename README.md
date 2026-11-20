@@ -1,42 +1,79 @@
-# DG Finance Intelligence — MVP
+﻿# LedgerFlow finance workflow
 
-A Next.js starter app for DG Academy's intelligent finance and accounting workflow.
+A Next.js 16 / Clerk / Neon finance operations workspace. Amounts remain in their original transaction currency. Consolidated reports use KHR and each USD transaction's recorded KHR-per-USD rate.
 
-## Included modules
+## Run and verify
 
-- Finance command-center dashboard
-- Invoice and Accounts Receivable tracking
-- Expense and Accounts Payable tracking
-- Approval-state visibility
-- Budget utilization
-- Rule-based intelligent finance alerts
-- API endpoint: `/api/insights`
-- Workflow map from training sale to management reporting
+Use Node 22 and pnpm 10.28.0:
 
-## Run locally
-
-```bash
-npm install
-npm run dev
+```sh
+pnpm install --frozen-lockfile
+pnpm env:check
+pnpm dev
+pnpm test
+pnpm lint
+pnpm typecheck
+pnpm build
 ```
 
-Open http://localhost:3000
+On Windows PowerShell, use `pnpm.cmd` and `vercel.cmd` if the execution policy blocks the `.ps1` command shims. `.nvmrc` selects Node 22 for version managers.
 
-## Phase 2 recommended architecture
+Tests run real PostgreSQL in memory using PGlite, with a test-only Clerk/Neon adapter. They never connect to the configured production database. They cover approval permissions, metadata retention, partial payments, duplicate and overpayment protection, concurrent settlements, tenant isolation, draft requests, evidence, reports, CSV parsing and closing locks.
 
-1. PostgreSQL / Supabase database
-2. Authentication + roles: Admin, Finance, Approver, Sales, Management
-3. CRUD forms for clients, courses, invoices, receipts, expenses, vendors and budgets
-4. Approval workflow with audit log
-5. LocalizeBook integration by API/export if supported by your account
-6. ABA/KHQR reconciliation integration where permitted
-7. AI assistant connected to live finance data via tools, with read-only defaults and approval gates for financial actions
-8. Monthly close checklist and management reporting
+## Access configuration
 
-## Core data entities
+Set `DATABASE_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, and `CLERK_SECRET_KEY`. To assign a workspace administrator, set `FINANCE_ADMIN_EMAILS` to a comma-separated list of verified Clerk email addresses. `FINANCE_ORGANIZATION_ID` defaults to `ledgerflow-org`, preserving existing records. Environment values belong in `.env` locally and in the deployment project's environment settings when deploying; never commit `.env`.
 
-Client, TrainingProgram, Project, Invoice, InvoiceLine, Receipt, Vendor, Expense, ExpenseApproval, Budget, Department, Account, JournalEntry, AuditLog.
+For a fresh local setup, copy `.env.example` to `.env.local` only if you do not already have local configuration, then fill in the required values. `pnpm env:check` checks required settings, URL formats and Clerk test/live key consistency without printing secrets or connecting to services. Existing `.env` files remain supported; `.env.local` takes precedence. Optional `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` configure live AI answers. Leave `SITE_URL` unset to use Vercel's deployment URL or localhost.
 
-## Important
+For Vercel, use the linked `ledgerflow-finance-operations` project, Node 22, and pnpm 10.28.0. Configure the required values for each target environment; keep preview data separate from production.
 
-This MVP uses demonstration data and deterministic rules. It is not yet a production accounting ledger and must not be treated as the official books until database controls, double-entry posting, permissions, audit logs, tax rules and reconciliation have been implemented and reviewed by DG Academy's finance/accounting owner.
+### Automatic release after fixes
+
+After completing a fix, run `pnpm test`, `pnpm typecheck`, and `pnpm build`, review the changes, commit them, and push to the `github` remote (`https://github.com/thysokunthea/Finance-Operation.git`). The production branch is `vercel-deployment`. Vercel's connected GitHub integration automatically deploys this branch; other branches create previews. Do not create a second CLI deployment for the same push.
+
+GitHub Actions runs the finance workflow tests and TypeScript checks on pushes and pull requests without production secrets. Vercel also runs the tests before its production build using `vercel.json`; failing tests or builds prevent that deployment from becoming live. Vercel deployment credentials stay with the native Git integration, so no Vercel token is required in GitHub Actions.
+
+Wait for the deployment matching the pushed commit to reach READY, then verify `/sign-in`, `/api/health`, and relevant changed routes. Sign in with an assigned workspace role to verify the private workflow when an authenticated session is available. Follow `AGENTS.md` for the required release steps on future fixes.
+
+Other members require server-managed Clerk **public metadata**:
+
+```json
+{
+  "financeOrganizationId": "ledgerflow-org",
+  "financeRole": "finance"
+}
+```
+
+Roles:
+
+| Role | Access |
+| --- | --- |
+| viewer | Read records and generate reports |
+| finance | Read, create/edit unpaid records, submit, record payments, review evidence and update closing checks |
+| approver | Read and approve/reject submitted transactions |
+| admin | All operations, settings, closing and reopening periods |
+
+Users without an assigned workspace and recognized role receive 403 from private APIs. Identity comes from Clerk, not caller-supplied identity headers. Workspace scoping is resolved per request; record IDs for new workspaces are namespaced. Admin assignment is configuration, not a self-service role change in the application.
+
+## Operational workflow
+
+1. **Record income or expense.** Enter counterparty, date, reference, category, amount, tax, department and currency. USD requires a positive KHR-per-USD rate. Subtotal plus tax must equal total. Saving submits the transaction for finance review. Legacy `/sales-invoices` and `/expenses-ap` URLs redirect to `/income` and `/expenses`.
+2. **Request an expense.** Payment Requests saves an editable draft with real details. Complete old drafts through Edit / complete draft. Submit creates one linked expense transaction, which enters Approvals. Its approval and payment status are derived from that transaction.
+3. **Attach evidence.** Upload files in Documents, enter a unique transaction ID or reference, and choose Link & verify after reviewing the file. Uploading alone leaves evidence Pending review. Previously auto-verified files are reset for actual review. One verified link belongs to one transaction.
+4. **Approve or reject.** Approver/admin can review submitted transactions. Rejection requires a reason. Correct rejected records from Transactions and save to resubmit. Audit events and metadata are stored separately, so reviewing never removes account tags, exchange rates or other details.
+5. **Receive or pay.** Open an approved transaction and record a payment/receipt with its date, amount, method, reference and exchange rate. Partial payments reduce outstanding balances. Duplicate references, retries and concurrent payments cannot overpay an invoice. Paid/part-paid records cannot be edited or deleted; use separate adjustment records. Recording a settlement does not transfer money through a bank.
+6. **Monitor and report.** AR/AP shows approved open balances in original currencies, and consolidated KHR totals. Dashboard cash and Cash Flow reports use recorded settlement dates. Recognized revenue/expense totals use approved transactions. Select a month in Reports; exported results and history are persisted. Aging reports calculate historical month-end balances. Tax Summary totals recorded tax; it does not determine tax deductibility or file a return. KHR budgets include USD spending translated at recorded transaction rates; USD budgets compare USD spending only. Missing rates are excluded and must be corrected before relying on consolidated totals.
+7. **Close the month.** Select the period, complete all checks, resolve approvals and verify linked evidence for every transaction. Admin closes and locks the period with a reason. Locked periods reject transaction creation, edits, deletion, approval, evidence changes, checklist changes and payments dated in that period. An older invoice can still be settled in a later open period. Admin can reopen with an audited reason.
+
+Financial mutations and their audit records run in a database transaction; a workspace advisory lock serializes payment/approval/closing changes. Edits also check the record version. Schema updates are additive and initialized by the data layer; take the normal database backup before a production rollout.
+
+## Automatic transaction creation
+
+On Transactions, enable **Automatic Transaction Creation from Uploaded Documents**, select Income or Expense, and enter the KHR-per-USD rate when the source does not include it. Upload PDF, images, TXT, or a single-invoice CSV. The browser extracts text/OCR locally (English and Khmer); the server checks explicitly labeled reference, party, date, description, currency, total and tax arithmetic. Each complete document creates one Pending transaction for finance review and links its evidence atomically. It never automatically approves or pays.
+
+Missing/ambiguous fields, unsupported Word/Excel formats, large/unreadable files and multi-invoice CSV exports go to **Needs review**. Extracted suggestions and processing status remain in Documents after reloading. Use **Create transaction record**, then **Create automatically**, to process an existing uploaded document. The file hash, invoice duplicate checks, deterministic record ID and database locking protect retries and concurrent uploads from duplicate financial records. Oversized requests report a clear upload error instead of claiming success.
+
+## Boundaries
+
+This is an operational register with journal/account tags, not a double-entry general ledger. Cash reports cover recorded receipts and payments, not unrecorded opening bank balances. Historical Paid records without settlement detail use their transaction date as a legacy estimate; review those before treating historical cash reports as official. Old USD records without rates are explicitly excluded from consolidated totals. AI answers require `OPENROUTER_API_KEY` and remain read-only; a limited rule-based fallback is available.

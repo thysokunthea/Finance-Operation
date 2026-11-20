@@ -34,15 +34,34 @@ export async function execute(
 
 export async function executeBatch(
   statements: Array<{ text: string; parameters?: unknown[] }>,
+  control?: { organizationId: string; dates?: string[] },
 ): Promise<void> {
   await ensureCoreSchema();
-  for (const statement of statements) {
-    await getSql().query(statement.text, statement.parameters ?? []);
-  }
+  const sql = getSql();
+  const guards = control
+    ? [
+        {
+          text: 'SELECT pg_advisory_xact_lock(hashtext($1))',
+          parameters: [control.organizationId],
+        },
+        ...(control.dates || []).map((date) => ({
+          text: 'SELECT ledgerflow_assert_open($1, $2)',
+          parameters: [control.organizationId, date.slice(0, 7)],
+        })),
+      ]
+    : [];
+  await sql.transaction(
+    [...guards, ...statements].map((statement) =>
+      sql.query(statement.text, statement.parameters ?? []),
+    ),
+  );
 }
 
 export async function ensureCoreSchema(): Promise<void> {
-  initialized ??= initializeCoreSchema();
+  initialized ??= initializeCoreSchema().catch((error) => {
+    initialized = null;
+    throw error;
+  });
   return initialized;
 }
 
@@ -146,5 +165,38 @@ async function initializeCoreSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_finance_tasks_org_status
       ON finance_tasks (organization_id, status)`,
   ];
+  statements.push(
+    `ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash text`,
+    `ALTER TABLE documents ADD COLUMN IF NOT EXISTS processing_status text NOT NULL DEFAULT 'Uploaded'`,
+    `ALTER TABLE documents ADD COLUMN IF NOT EXISTS extraction_json text`,
+    `ALTER TABLE documents ADD COLUMN IF NOT EXISTS linked_transaction_id text REFERENCES transactions(id)`,
+    `UPDATE documents d SET status='Pending review' WHERE status='Verified' AND NOT EXISTS(SELECT 1 FROM audit_logs a WHERE a.organization_id=d.organization_id AND a.resource_type='document' AND a.resource_id=d.id AND a.action='review')`,
+    `CREATE TABLE IF NOT EXISTS report_runs(id text PRIMARY KEY,organization_id text NOT NULL REFERENCES organizations(id),payload_json text NOT NULL,created_by text NOT NULL,created_at timestamptz NOT NULL DEFAULT now())`,
+    `ALTER TABLE payment_requests ADD COLUMN IF NOT EXISTS metadata_json text`,
+    `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS metadata_json text`,
+    `CREATE TABLE IF NOT EXISTS transaction_payments (
+      id text PRIMARY KEY, organization_id text NOT NULL REFERENCES organizations(id),
+      transaction_id text NOT NULL REFERENCES transactions(id), payment_date date NOT NULL,
+      amount_minor bigint NOT NULL CHECK(amount_minor > 0), exchange_rate numeric NOT NULL CHECK(exchange_rate > 0),
+      method text NOT NULL, reference text NOT NULL, recorded_by text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(organization_id, transaction_id, reference)
+    )`,
+    `CREATE TABLE IF NOT EXISTS closed_periods (
+      organization_id text NOT NULL REFERENCES organizations(id), period text NOT NULL,
+      closed_by text NOT NULL, closed_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(organization_id, period)
+    )`,
+    `CREATE OR REPLACE FUNCTION ledgerflow_assert_open(org text, month_key text) RETURNS void AS $$
+      BEGIN IF EXISTS(SELECT 1 FROM closed_periods WHERE organization_id = org AND period = month_key)
+      THEN RAISE EXCEPTION 'This accounting period is closed. Reopen it before changing records.'; END IF; END;
+      $$ LANGUAGE plpgsql`,
+    `CREATE OR REPLACE FUNCTION ledgerflow_assert(ok boolean, message text) RETURNS void AS $$
+      BEGIN IF NOT COALESCE(ok, false) THEN RAISE EXCEPTION '%', message; END IF; END;
+      $$ LANGUAGE plpgsql`,
+    `CREATE INDEX IF NOT EXISTS idx_payments_org_date ON transaction_payments(organization_id, payment_date)`,
+    `UPDATE transactions t SET metadata_json = (SELECT a.new_json FROM audit_logs a
+      WHERE a.organization_id = t.organization_id AND a.resource_type = 'transaction' AND a.resource_id = t.id
+      AND a.action IN ('create', 'update') ORDER BY a.occurred_at DESC LIMIT 1)
+      WHERE metadata_json IS NULL`,
+  );
   for (const statement of statements) await sql.query(statement);
 }

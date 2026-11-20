@@ -1,7 +1,31 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BarChart3, Bell, BookOpen, Bot, Building2, CalendarCheck2, CheckSquare2, ChevronDown, CircleDollarSign, ClipboardCheck, CreditCard, FileBarChart, FileText, FolderOpen, HandCoins, LayoutDashboard, Menu, Receipt, ReceiptText, Search, Settings, Upload, WalletCards, X } from 'lucide-react';
+import Link from 'next/link';
+import {
+  BarChart3,
+  Bell,
+  BookOpen,
+  Bot,
+  Building2,
+  CalendarCheck2,
+  CheckSquare2,
+  ChevronDown,
+  CircleDollarSign,
+  ClipboardCheck,
+  FileBarChart,
+  FileText,
+  FolderOpen,
+  HandCoins,
+  LayoutDashboard,
+  Menu,
+  ReceiptText,
+  Search,
+  Settings,
+  Upload,
+  WalletCards,
+  X,
+} from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,90 +35,479 @@ import { useLanguage } from '@/lib/i18n';
 
 type NavKey = string;
 const primaryNav = [
-  { key: 'dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard, href: '/' },
-  { key: 'transactions', labelKey: 'nav.transactions', icon: ReceiptText, href: '/transactions' },
-  { key: 'sales', labelKey: 'nav.sales', icon: Receipt, href: '/sales-invoices' },
-  { key: 'income', labelKey: 'nav.income', icon: CircleDollarSign, href: '/income' },
-  { key: 'expenses', labelKey: 'nav.expenses', icon: WalletCards, href: '/expenses' },
-  { key: 'expenses-ap', labelKey: 'nav.expensesAp', icon: CreditCard, href: '/expenses-ap' },
-  { key: 'receivables', labelKey: 'nav.receivables', icon: HandCoins, href: '/receivables' },
-  { key: 'payables', labelKey: 'nav.payables', icon: Building2, href: '/payables' },
-  { key: 'requests', labelKey: 'nav.requests', icon: FileText, href: '/payment-requests' },
-  { key: 'budgets', labelKey: 'nav.budgets', icon: BarChart3, href: '/budgets' },
-  { key: 'accounting', labelKey: 'nav.accounting', icon: BookOpen, href: '/accounting' },
+  {
+    key: 'dashboard',
+    labelKey: 'nav.dashboard',
+    icon: LayoutDashboard,
+    href: '/',
+  },
+  {
+    key: 'transactions',
+    labelKey: 'nav.transactions',
+    icon: ReceiptText,
+    href: '/transactions',
+  },
+  {
+    key: 'income',
+    labelKey: 'nav.income',
+    icon: CircleDollarSign,
+    href: '/income',
+  },
+  {
+    key: 'expenses',
+    labelKey: 'nav.expenses',
+    icon: WalletCards,
+    href: '/expenses',
+  },
+  {
+    key: 'receivables',
+    labelKey: 'nav.receivables',
+    icon: HandCoins,
+    href: '/receivables',
+  },
+  {
+    key: 'payables',
+    labelKey: 'nav.payables',
+    icon: Building2,
+    href: '/payables',
+  },
+  {
+    key: 'requests',
+    labelKey: 'nav.requests',
+    icon: FileText,
+    href: '/payment-requests',
+  },
+  {
+    key: 'budgets',
+    labelKey: 'nav.budgets',
+    icon: BarChart3,
+    href: '/budgets',
+  },
+  {
+    key: 'accounting',
+    labelKey: 'nav.accounting',
+    icon: BookOpen,
+    href: '/accounting',
+  },
 ];
 const workflowNav = [
   { key: 'tasks', labelKey: 'nav.tasks', icon: CheckSquare2, href: '/tasks' },
-  { key: 'approvals', labelKey: 'nav.approvals', icon: ClipboardCheck, href: '/approvals' },
-  { key: 'documents', labelKey: 'nav.documents', icon: FolderOpen, href: '/documents' },
-  { key: 'reports', labelKey: 'nav.reports', icon: FileBarChart, href: '/reports' },
+  {
+    key: 'approvals',
+    labelKey: 'nav.approvals',
+    icon: ClipboardCheck,
+    href: '/approvals',
+  },
+  {
+    key: 'documents',
+    labelKey: 'nav.documents',
+    icon: FolderOpen,
+    href: '/documents',
+  },
+  {
+    key: 'reports',
+    labelKey: 'nav.reports',
+    icon: FileBarChart,
+    href: '/reports',
+  },
   { key: 'import', labelKey: 'nav.import', icon: Upload, href: '/import' },
-  { key: 'closing', labelKey: 'nav.closing', icon: CalendarCheck2, href: '/monthly-closing' },
-  { key: 'assistant', labelKey: 'nav.assistant', icon: Bot, href: '/assistant' },
+  {
+    key: 'closing',
+    labelKey: 'nav.closing',
+    icon: CalendarCheck2,
+    href: '/monthly-closing',
+  },
+  {
+    key: 'assistant',
+    labelKey: 'nav.assistant',
+    icon: Bot,
+    href: '/assistant',
+  },
 ];
 
 function LanguageSwitch() {
   const { lang, setLang, t } = useLanguage();
   return (
-    <div className="flex items-center gap-1 rounded-lg bg-white/[0.06] p-1 text-[11px] font-medium" role="group" aria-label={t('shell.language')}>
-      <button type="button" onClick={() => setLang('en')} className={cn('rounded-md px-2 py-1 transition-colors', lang === 'en' ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/60 hover:text-white')}>EN</button>
-      <button type="button" onClick={() => setLang('km')} className={cn('rounded-md px-2 py-1 transition-colors', lang === 'km' ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/60 hover:text-white')}>ខ្មែរ</button>
+    <div
+      className="flex items-center gap-1 rounded-lg bg-white/[0.06] p-1 text-[11px] font-medium"
+      aria-label={t('shell.language')}
+    >
+      <button
+        type="button"
+        onClick={() => setLang('en')}
+        className={cn(
+          'rounded-md px-2 py-1 transition-colors',
+          lang === 'en'
+            ? 'bg-sidebar-accent text-white'
+            : 'text-sidebar-foreground/60 hover:text-white',
+        )}
+      >
+        EN
+      </button>
+      <button
+        type="button"
+        onClick={() => setLang('km')}
+        className={cn(
+          'rounded-md px-2 py-1 transition-colors',
+          lang === 'km'
+            ? 'bg-sidebar-accent text-white'
+            : 'text-sidebar-foreground/60 hover:text-white',
+        )}
+      >
+        ខ្មែរ
+      </button>
     </div>
   );
 }
 
-export function FinanceShell({ children, active, userName, userEmail, demo }: { children: React.ReactNode; active: NavKey; userName: string; userEmail: string; demo: boolean }) {
+export function FinanceShell({
+  children,
+  active,
+  userName,
+  userEmail,
+  demo,
+}: {
+  children: React.ReactNode;
+  active: NavKey;
+  userName: string;
+  userEmail: string;
+  demo: boolean;
+}) {
   const { t } = useLanguage();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [approvalCount, setApprovalCount] = useState(0);
   useEffect(() => {
     let active = true;
-    const refresh = () => fetch('/api/approvals', { cache: 'no-store' })
-      .then(async (response) => response.ok ? await response.json() as { approvals?: unknown[] } : { approvals: [] })
-      .then((payload) => { if (active) setApprovalCount(payload.approvals?.length || 0); })
-      .catch(() => undefined);
-    refresh();
+    const refresh = () =>
+      fetch('/api/approvals', { cache: 'no-store' })
+        .then(async (response) =>
+          response.ok
+            ? ((await response.json()) as { approvals?: unknown[] })
+            : { approvals: [] },
+        )
+        .then((payload) => {
+          if (active) setApprovalCount(payload.approvals?.length || 0);
+        })
+        .catch(() => undefined);
+    void refresh();
     window.addEventListener('ledgerflow-approvals-changed', refresh);
-    return () => { active = false; window.removeEventListener('ledgerflow-approvals-changed', refresh); };
+    return () => {
+      active = false;
+      window.removeEventListener('ledgerflow-approvals-changed', refresh);
+    };
   }, []);
-  const initials = userName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+  const initials = userName
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
   return (
     <div className="min-h-screen bg-background text-foreground lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <button aria-label="Close navigation overlay" className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
+          <button
+            aria-label="Close navigation overlay"
+            className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
+            onClick={() => setMobileOpen(false)}
+          />
           <aside className="relative flex h-full w-[min(86vw,320px)] flex-col bg-sidebar text-sidebar-foreground shadow-2xl">
             <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-4">
-              <div className="grid size-9 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"><BarChart3 className="size-5" /></div>
-              <div className="flex-1"><p className="font-semibold text-white">LedgerFlow</p><p className="text-[11px] text-sidebar-foreground/55">{t('shell.tagline')}</p></div>
-              <Button variant="ghost" size="icon" aria-label="Close navigation" className="text-white hover:bg-white/10" onClick={() => setMobileOpen(false)}><X /></Button>
+              <div className="grid size-9 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
+                <BarChart3 className="size-5" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-white">LedgerFlow</p>
+                <p className="text-[11px] text-sidebar-foreground/55">
+                  {t('shell.tagline')}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Close navigation"
+                className="text-white hover:bg-white/10"
+                onClick={() => setMobileOpen(false)}
+              >
+                <X />
+              </Button>
             </div>
-            <div className="border-b border-sidebar-border px-4 py-3"><LanguageSwitch /></div>
-            <nav aria-label="Mobile navigation" className="flex-1 overflow-y-auto px-3 py-5">
-              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">{t('section.finance')}</p>
-              <div className="space-y-1">{primaryNav.map((item) => { const Icon = item.icon; const isActive = item.key === active; return <a key={item.key} href={item.href} aria-current={isActive ? 'page' : undefined} onClick={() => setMobileOpen(false)} className={cn('flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors', isActive ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white')}><Icon className={cn('size-4', isActive && 'text-sidebar-primary')} /><span>{t(item.labelKey)}</span></a>; })}</div>
-              <p className="mb-2 mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">{t('section.workflow')}</p>
-              <div className="space-y-1">{workflowNav.map((item) => { const Icon = item.icon; const isActive = item.key === active; return <a key={item.key} href={item.href} aria-current={isActive ? 'page' : undefined} onClick={() => setMobileOpen(false)} className={cn('flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors', isActive ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white')}><Icon className={cn('size-4', isActive && 'text-sidebar-primary')} /><span>{t(item.labelKey)}</span>{item.key === 'approvals' && approvalCount > 0 ? <span className="ml-auto rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{approvalCount}</span> : null}</a>; })}</div>
-              <p className="mb-2 mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">{t('section.administration')}</p>
-              <a href="/settings" aria-current={active === 'settings' ? 'page' : undefined} onClick={() => setMobileOpen(false)} className={cn('flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors', active === 'settings' ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white')}><Settings className="size-4" /><span>{t('nav.settings')}</span></a>
+            <div className="border-b border-sidebar-border px-4 py-3">
+              <LanguageSwitch />
+            </div>
+            <nav
+              aria-label="Mobile navigation"
+              className="flex-1 overflow-y-auto px-3 py-5"
+            >
+              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">
+                {t('section.finance')}
+              </p>
+              <div className="space-y-1">
+                {primaryNav.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = item.key === active;
+                  return (
+                    <Link
+                      key={item.key}
+                      href={item.href}
+                      aria-current={isActive ? 'page' : undefined}
+                      onClick={() => setMobileOpen(false)}
+                      className={cn(
+                        'flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors',
+                        isActive
+                          ? 'bg-sidebar-accent font-medium text-white'
+                          : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white',
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          'size-4',
+                          isActive && 'text-sidebar-primary',
+                        )}
+                      />
+                      <span>{t(item.labelKey)}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+              <p className="mb-2 mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">
+                {t('section.workflow')}
+              </p>
+              <div className="space-y-1">
+                {workflowNav.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = item.key === active;
+                  return (
+                    <Link
+                      key={item.key}
+                      href={item.href}
+                      aria-current={isActive ? 'page' : undefined}
+                      onClick={() => setMobileOpen(false)}
+                      className={cn(
+                        'flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors',
+                        isActive
+                          ? 'bg-sidebar-accent font-medium text-white'
+                          : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white',
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          'size-4',
+                          isActive && 'text-sidebar-primary',
+                        )}
+                      />
+                      <span>{t(item.labelKey)}</span>
+                      {item.key === 'approvals' && approvalCount > 0 ? (
+                        <span className="ml-auto rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                          {approvalCount}
+                        </span>
+                      ) : null}
+                    </Link>
+                  );
+                })}
+              </div>
+              <p className="mb-2 mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">
+                {t('section.administration')}
+              </p>
+              <Link
+                href="/settings"
+                aria-current={active === 'settings' ? 'page' : undefined}
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  'flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors',
+                  active === 'settings'
+                    ? 'bg-sidebar-accent font-medium text-white'
+                    : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white',
+                )}
+              >
+                <Settings className="size-4" />
+                <span>{t('nav.settings')}</span>
+              </Link>
             </nav>
           </aside>
         </div>
       ) : null}
       <aside className="hidden min-h-screen bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
-        <div className="flex h-17 items-center gap-3 border-b border-sidebar-border px-5"><div className="grid size-9 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_8px_22px_rgb(45_212_191/18%)]"><BarChart3 className="size-5" /></div><div><p className="font-semibold tracking-tight text-white">LedgerFlow</p><p className="text-[11px] text-sidebar-foreground/55">{t('shell.tagline')}</p></div></div>
-        <div className="border-b border-sidebar-border px-5 py-3"><LanguageSwitch /></div>
-        <nav aria-label="Primary navigation" className="flex-1 overflow-y-auto px-3 py-5">
-          <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">{t('section.finance')}</p>
-          <div className="space-y-1">{primaryNav.map((item) => { const Icon = item.icon; const isActive = item.key === active; return <a key={item.key} href={item.href} aria-current={isActive ? 'page' : undefined} className={cn('flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] transition-colors', isActive ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white')}><Icon className={cn('size-4', isActive && 'text-sidebar-primary')} /><span>{t(item.labelKey)}</span></a>; })}</div>
-          <p className="mb-2 mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">{t('section.workflow')}</p>
-          <div className="space-y-1">{workflowNav.map((item) => { const Icon = item.icon; const isActive = item.key === active; return <a key={item.key} href={item.href} aria-current={isActive ? 'page' : undefined} className={cn('flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] transition-colors', isActive ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white')}><Icon className={cn('size-4', isActive && 'text-sidebar-primary')} /><span>{t(item.labelKey)}</span>{item.key === 'approvals' && approvalCount > 0 ? <span className="ml-auto rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{approvalCount}</span> : null}</a>; })}</div>
+        <div className="flex h-17 items-center gap-3 border-b border-sidebar-border px-5">
+          <div className="grid size-9 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_8px_22px_rgb(45_212_191/18%)]">
+            <BarChart3 className="size-5" />
+          </div>
+          <div>
+            <p className="font-semibold tracking-tight text-white">
+              LedgerFlow
+            </p>
+            <p className="text-[11px] text-sidebar-foreground/55">
+              {t('shell.tagline')}
+            </p>
+          </div>
+        </div>
+        <div className="border-b border-sidebar-border px-5 py-3">
+          <LanguageSwitch />
+        </div>
+        <nav
+          aria-label="Primary navigation"
+          className="flex-1 overflow-y-auto px-3 py-5"
+        >
+          <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">
+            {t('section.finance')}
+          </p>
+          <div className="space-y-1">
+            {primaryNav.map((item) => {
+              const Icon = item.icon;
+              const isActive = item.key === active;
+              return (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={cn(
+                    'flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] transition-colors',
+                    isActive
+                      ? 'bg-sidebar-accent font-medium text-white'
+                      : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white',
+                  )}
+                >
+                  <Icon
+                    className={cn('size-4', isActive && 'text-sidebar-primary')}
+                  />
+                  <span>{t(item.labelKey)}</span>
+                </Link>
+              );
+            })}
+          </div>
+          <p className="mb-2 mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/40">
+            {t('section.workflow')}
+          </p>
+          <div className="space-y-1">
+            {workflowNav.map((item) => {
+              const Icon = item.icon;
+              const isActive = item.key === active;
+              return (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={cn(
+                    'flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] transition-colors',
+                    isActive
+                      ? 'bg-sidebar-accent font-medium text-white'
+                      : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/65 hover:text-white',
+                  )}
+                >
+                  <Icon
+                    className={cn('size-4', isActive && 'text-sidebar-primary')}
+                  />
+                  <span>{t(item.labelKey)}</span>
+                  {item.key === 'approvals' && approvalCount > 0 ? (
+                    <span className="ml-auto rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                      {approvalCount}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
+          </div>
         </nav>
-        <div className="border-t border-sidebar-border p-3"><a href="/settings" className={cn('mb-2 flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] transition-colors', active === 'settings' ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/65 hover:text-white')}><Settings className="size-4" /> {t('nav.settings')}</a><div className="flex items-center gap-3 rounded-xl bg-white/[0.055] p-2.5"><Avatar size="sm" className="size-8"><AvatarFallback className="bg-sidebar-primary font-semibold text-sidebar-primary-foreground">{initials}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-white">{userName}</p><p className="truncate text-[10px] text-sidebar-foreground/45">{t('shell.financeManager')}</p></div><ChevronDown className="size-3.5 text-sidebar-foreground/45" /></div></div>
+        <div className="border-t border-sidebar-border p-3">
+          <Link
+            href="/settings"
+            className={cn(
+              'mb-2 flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] transition-colors',
+              active === 'settings'
+                ? 'bg-sidebar-accent font-medium text-white'
+                : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/65 hover:text-white',
+            )}
+          >
+            <Settings className="size-4" /> {t('nav.settings')}
+          </Link>
+          <div className="flex items-center gap-3 rounded-xl bg-white/[0.055] p-2.5">
+            <Avatar size="sm" className="size-8">
+              <AvatarFallback className="bg-sidebar-primary font-semibold text-sidebar-primary-foreground">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-white">
+                {userName}
+              </p>
+              <p className="truncate text-[10px] text-sidebar-foreground/45">
+                {t('shell.financeManager')}
+              </p>
+            </div>
+            <ChevronDown className="size-3.5 text-sidebar-foreground/45" />
+          </div>
+        </div>
       </aside>
       <div className="min-w-0">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-card/95 px-4 backdrop-blur md:px-7"><Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu /></Button><a href="/" className="flex items-center gap-2 lg:hidden"><span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground"><BarChart3 className="size-4" /></span><span className="hidden font-semibold sm:inline">LedgerFlow</span></a><div className="relative ml-auto hidden w-full max-w-sm md:block lg:ml-0"><Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search transactions, invoices, vendors, and tasks" placeholder={t('shell.searchPlaceholder')} className="h-9 bg-muted/55 pl-8" onKeyDown={(event) => { if (event.key === 'Enter' && event.currentTarget.value.trim()) window.location.href = `/transactions?search=${encodeURIComponent(event.currentTarget.value.trim())}`; }} /></div><div className="ml-auto flex items-center gap-2">{demo ? <Badge variant="outline" className="hidden border-amber-300 bg-amber-50 text-amber-700 sm:inline-flex">{t('shell.demoWorkspace')}</Badge> : null}<Button variant="ghost" size="icon" aria-label="Notifications" className="relative" onClick={() => { window.location.href = '/approvals'; }}><Bell /><span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-amber-500 ring-2 ring-card" /></Button><div className="hidden items-center gap-2 border-l pl-3 sm:flex"><Avatar size="sm"><AvatarFallback className="bg-primary/12 font-semibold text-primary">{initials}</AvatarFallback></Avatar><div className="hidden xl:block"><p className="max-w-36 truncate text-xs font-medium">{userName}</p><p className="max-w-36 truncate text-[10px] text-muted-foreground">{userEmail}</p></div></div></div></header>
-        <main className="mx-auto w-full max-w-[1600px] p-4 md:p-7">{children}</main>
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-card/95 px-4 backdrop-blur md:px-7">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            aria-label="Open navigation"
+            onClick={() => setMobileOpen(true)}
+          >
+            <Menu />
+          </Button>
+          <Link href="/" className="flex items-center gap-2 lg:hidden">
+            <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
+              <BarChart3 className="size-4" />
+            </span>
+            <span className="hidden font-semibold sm:inline">LedgerFlow</span>
+          </Link>
+          <div className="relative ml-auto hidden w-full max-w-sm md:block lg:ml-0">
+            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="Search transactions, invoices, vendors, and tasks"
+              placeholder={t('shell.searchPlaceholder')}
+              className="h-9 bg-muted/55 pl-8"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && event.currentTarget.value.trim())
+                  window.location.href = `/transactions?search=${encodeURIComponent(event.currentTarget.value.trim())}`;
+              }}
+            />
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            {demo ? (
+              <Badge
+                variant="outline"
+                className="hidden border-amber-300 bg-amber-50 text-amber-700 sm:inline-flex"
+              >
+                {t('shell.demoWorkspace')}
+              </Badge>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Notifications"
+              className="relative"
+              onClick={() => {
+                window.location.href = '/approvals';
+              }}
+            >
+              <Bell />
+              <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-amber-500 ring-2 ring-card" />
+            </Button>
+            <div className="hidden items-center gap-2 border-l pl-3 sm:flex">
+              <Avatar size="sm">
+                <AvatarFallback className="bg-primary/12 font-semibold text-primary">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="hidden xl:block">
+                <p className="max-w-36 truncate text-xs font-medium">
+                  {userName}
+                </p>
+                <p className="max-w-36 truncate text-[10px] text-muted-foreground">
+                  {userEmail}
+                </p>
+              </div>
+            </div>
+          </div>
+        </header>
+        <main className="mx-auto w-full max-w-[1600px] p-4 md:p-7">
+          {children}
+        </main>
       </div>
     </div>
   );

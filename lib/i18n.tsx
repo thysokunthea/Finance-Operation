@@ -1,6 +1,12 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useSyncExternalStore,
+} from 'react';
 import { translations, type Lang } from './translations';
 
 export type { Lang };
@@ -19,25 +25,20 @@ function isLang(value: string | null): value is Lang {
 }
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>('en');
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (isLang(stored)) setLangState(stored);
-    } catch {
-      /* ignore unavailable storage */
-    }
-  }, []);
-
-  const setLang = (next: Lang) => {
-    setLangState(next);
+  const lang = useSyncExternalStore(
+    subscribeLanguage,
+    readLanguage,
+    () => 'en' as Lang,
+  );
+  const setLang = useCallback((next: Lang) => {
+    fallbackLanguage = next;
     try {
       localStorage.setItem(STORAGE_KEY, next);
     } catch {
       /* ignore unavailable storage */
     }
-  };
+    window.dispatchEvent(new Event('ledgerflow-language'));
+  }, []);
 
   const t = useMemo(() => {
     return (key: string, vars?: Record<string, string | number>) => {
@@ -51,13 +52,36 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     };
   }, [lang]);
 
-  const value = useMemo(() => ({ lang, setLang, t }), [lang, t]);
+  const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
 
-  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
+  return (
+    <LanguageContext.Provider value={value}>
+      {children}
+    </LanguageContext.Provider>
+  );
+}
+
+let fallbackLanguage: Lang = 'en';
+function readLanguage(): Lang {
+  try {
+    const value = localStorage.getItem(STORAGE_KEY);
+    return isLang(value) ? value : fallbackLanguage;
+  } catch {
+    return fallbackLanguage;
+  }
+}
+function subscribeLanguage(notify: () => void) {
+  window.addEventListener('storage', notify);
+  window.addEventListener('ledgerflow-language', notify);
+  return () => {
+    window.removeEventListener('storage', notify);
+    window.removeEventListener('ledgerflow-language', notify);
+  };
 }
 
 export function useLanguage() {
   const context = useContext(LanguageContext);
-  if (!context) throw new Error('useLanguage must be used within a LanguageProvider');
+  if (!context)
+    throw new Error('useLanguage must be used within a LanguageProvider');
   return context;
 }
