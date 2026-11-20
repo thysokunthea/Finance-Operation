@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { PaymentForm } from './workflow-forms';
 import { readDocumentText } from '@/lib/document-reader';
+import { automaticDocumentFormat } from '@/lib/document-format';
 import {
   CalendarDays,
   CheckCircle2,
@@ -93,6 +95,7 @@ type TransactionRow = {
   paidAmount?: number;
   version?: number;
   documentIds?: string[];
+  sourceDocument?: { id: string; sheet: string; row: number };
 };
 type TransactionDraft = Omit<ScannedTransaction, 'confidence' | 'warnings'> & {
   department: string;
@@ -100,6 +103,8 @@ type TransactionDraft = Omit<ScannedTransaction, 'confidence' | 'warnings'> & {
   exchangeRate: string;
   journalType: JournalType;
   accountCode: string;
+  sourceDocument?: TransactionRow['sourceDocument'];
+  sourceRecordId?: string;
 };
 type UploadedSource = { id: string; fileName: string; file?: File };
 type AutomaticResult = {
@@ -107,6 +112,21 @@ type AutomaticResult = {
   transaction?: TransactionRow;
   draft?: TransactionRow;
   issues: string[];
+  batch?: boolean;
+  transactions?: TransactionRow[];
+  createdCount?: number;
+  duplicateCount?: number;
+  reviewCount?: number;
+  nextOffset?: number | null;
+  rows?: {
+    sheet: string;
+    row: number;
+    status: string;
+    issues: string[];
+    warnings: string[];
+    draft?: TransactionRow;
+    transaction?: TransactionRow;
+  }[];
 };
 type UploadOutcome = UploadedSource & AutomaticResult;
 
@@ -188,6 +208,9 @@ export function TransactionsContent({
     type === 'Income' ? 'Income' : 'Expense',
   );
   const [automaticRate, setAutomaticRate] = useState('');
+  const [workbookCurrency, setWorkbookCurrency] = useState<'USD' | 'KHR'>(
+    'USD',
+  );
   const [automaticProgress, setAutomaticProgress] = useState('');
   const [uploadOutcomes, setUploadOutcomes] = useState<UploadOutcome[]>([]);
   const [pendingDocuments, setPendingDocuments] = useState<
@@ -229,8 +252,14 @@ export function TransactionsContent({
             currency: suggestion.currency || '',
             exchangeRate: suggestion.exchangeRate || '',
             taxTreatment: 'Review required',
-            journalType: classifyJournal(suggestion.type, 'Pending'),
+            journalType: isJournalType(suggestion.journalType)
+              ? suggestion.journalType
+              : classifyJournal(suggestion.type, 'Pending'),
             accountCode: suggestion.accountCode || base.accountCode,
+            sourceDocument: suggestion.sourceDocument,
+            sourceRecordId: suggestion.sourceDocument
+              ? suggestion.id
+              : undefined,
           }
         : { description: source.fileName }),
       documentType: 'Uploaded document',
@@ -250,48 +279,88 @@ export function TransactionsContent({
   ): Promise<AutomaticResult> => {
     let text = '';
     let readingIssue = '';
+    const spreadsheet =
+      automaticDocumentFormat(source.fileName, source.file?.type) === 'excel';
     try {
-      if (!source.file) throw new Error('Open this file for manual review.');
-      text = await readDocumentText(source.file, (percent) =>
-        setAutomaticProgress(source.fileName + ' · ' + percent + '%'),
-      );
+      if (!spreadsheet && !source.file)
+        throw new Error('Open this file for manual review.');
+      if (!spreadsheet)
+        text = await readDocumentText(source.file!, (percent) =>
+          setAutomaticProgress(source.fileName + ' · ' + percent + '%'),
+        );
     } catch (error) {
       readingIssue =
         error instanceof Error ? error.message : 'Document reading failed.';
     }
-    const response = await fetch(
-      '/api/documents/' + encodeURIComponent(source.id) + '/transaction',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          extractionError: readingIssue || undefined,
-          type: type === 'All' ? automaticType : type,
-          exchangeRate: conversionRate,
-          department: 'Operations',
-          ...overrides,
-        }),
-      },
-    );
-    const result = (await response.json()) as AutomaticResult & {
-      error?: string;
-    };
-    if (!response.ok) throw new Error(result.error || t('tx.autoFailed'));
-    if (result.transaction) {
-      const transaction = result.transaction;
-      setRecords((rows) => [
-        transaction,
-        ...rows.filter((row) => row.id !== transaction.id),
-      ]);
-      setSelected(transaction);
-      setDateFrom('');
-      setDateTo('');
-      setQuery('');
-      setStatus('All statuses');
-      setDepartmentFilter('All departments');
-      window.dispatchEvent(new Event('ledgerflow-approvals-changed'));
-    }
+    let offset = 0;
+    let result: AutomaticResult = { status: 'needs_review', issues: [] };
+    do {
+      const response = await fetch(
+        '/api/documents/' + encodeURIComponent(source.id) + '/transaction',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text,
+            spreadsheetImport: spreadsheet,
+            defaultCurrency: workbookCurrency,
+            offset,
+            extractionError: readingIssue || undefined,
+            type: type === 'All' ? automaticType : type,
+            exchangeRate: conversionRate,
+            department: 'Operations',
+            ...overrides,
+          }),
+        },
+      );
+      const chunk = (await response.json()) as AutomaticResult & {
+        error?: string;
+      };
+      if (!response.ok) throw new Error(chunk.error || t('tx.autoFailed'));
+      result = chunk.batch
+        ? {
+            ...chunk,
+            transactions: [
+              ...(result.transactions || []),
+              ...(chunk.transactions || []),
+            ],
+            rows: [...(result.rows || []), ...(chunk.rows || [])],
+            issues: [...new Set([...result.issues, ...chunk.issues])],
+            createdCount:
+              (result.createdCount || 0) + (chunk.createdCount || 0),
+            duplicateCount:
+              (result.duplicateCount || 0) + (chunk.duplicateCount || 0),
+            reviewCount: (result.reviewCount || 0) + (chunk.reviewCount || 0),
+          }
+        : chunk;
+      const added =
+        chunk.transactions || (chunk.transaction ? [chunk.transaction] : []);
+      if (added.length) {
+        const ids = new Set(added.map((row) => row.id));
+        setRecords((rows) => [
+          ...added,
+          ...rows.filter((row) => !ids.has(row.id)),
+        ]);
+        setSelected(added[0]);
+        setDateFrom('');
+        setDateTo('');
+        setQuery('');
+        setStatus('All statuses');
+        setDepartmentFilter('All departments');
+        window.dispatchEvent(new Event('ledgerflow-approvals-changed'));
+      }
+      offset = chunk.nextOffset ?? 0;
+      if (offset)
+        setAutomaticProgress(
+          source.fileName + ' · ' + offset + ' ' + t('tx.importRows'),
+        );
+    } while (offset);
+    if (result.batch)
+      result.status = result.createdCount
+        ? 'created'
+        : result.duplicateCount
+          ? 'existing'
+          : 'needs_review';
     return result;
   };
   const restoredDocument = useRef<string | null>(null);
@@ -379,6 +448,7 @@ export function TransactionsContent({
       [];
     const reviewQueue: UploadOutcome[] = [];
     let createdCount = 0;
+    let batchReviewCount = 0;
     let duplicateCount = 0;
     try {
       for (const file of files) {
@@ -448,10 +518,19 @@ export function TransactionsContent({
             }
             const outcome = { ...source, ...result };
             setUploadOutcomes((outcomes) => [...outcomes, outcome]);
-            if (result.status === 'created') createdCount++;
-            if (result.status === 'duplicate' || result.status === 'existing')
-              duplicateCount++;
-            if (result.status === 'needs_review') reviewQueue.push(outcome);
+            createdCount += result.batch
+              ? result.createdCount || 0
+              : result.status === 'created'
+                ? 1
+                : 0;
+            duplicateCount += result.batch
+              ? result.duplicateCount || 0
+              : result.status === 'duplicate' || result.status === 'existing'
+                ? 1
+                : 0;
+            batchReviewCount += result.reviewCount || 0;
+            if (result.status === 'needs_review' && !result.batch)
+              reviewQueue.push(outcome);
           }
           if (target) {
             const linkResponse = await fetch('/api/documents', {
@@ -500,7 +579,7 @@ export function TransactionsContent({
           !target && automaticEnabled
             ? t('tx.autoSummary', {
                 created: createdCount,
-                review: reviewQueue.length,
+                review: reviewQueue.length + batchReviewCount,
                 duplicates: duplicateCount,
               })
             : '',
@@ -636,6 +715,7 @@ export function TransactionsContent({
       amount: record.amount.replace(/[^0-9.-]/g, ''),
       paymentMethod: record.paymentMethod || '',
       purchaseOrder: record.purchaseOrder || '',
+      sourceDocument: record.sourceDocument,
       taxTreatment: record.taxTreatment || 'Standard VAT 10%',
       exchangeRate:
         record.exchangeRate || (record.currency === 'KHR' ? '1' : ''),
@@ -710,9 +790,13 @@ export function TransactionsContent({
     const record: TransactionRow = {
       id:
         existing?.id ||
+        draft.sourceRecordId ||
         `TRX-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
       version: existing?.version,
-      documentIds: pendingDocuments.map((doc) => doc.id),
+      documentIds: draft.sourceDocument
+        ? []
+        : pendingDocuments.map((doc) => doc.id),
+      sourceDocument: draft.sourceDocument || existing?.sourceDocument,
       date: draft.date,
       type: draft.type,
       reference: draft.reference.trim(),
@@ -981,6 +1065,20 @@ export function TransactionsContent({
               </label>
             ) : null}
             <label className="max-w-56 text-xs">
+              {t('tx.workbookCurrency')}
+              <select
+                disabled={uploading}
+                className="mt-1 h-10 w-full rounded-lg border bg-card px-3"
+                value={workbookCurrency}
+                onChange={(event) =>
+                  setWorkbookCurrency(event.target.value as 'USD' | 'KHR')
+                }
+              >
+                <option value="USD">USD</option>
+                <option value="KHR">KHR</option>
+              </select>
+            </label>
+            <label className="max-w-56 text-xs">
               {t('tx.autoRate')}
               <Input
                 disabled={uploading}
@@ -1019,7 +1117,7 @@ export function TransactionsContent({
                 <Badge variant="outline">
                   {t('tx.autoStatus.' + outcome.status)}
                 </Badge>
-                {outcome.status === 'needs_review' ? (
+                {outcome.status === 'needs_review' && !outcome.batch ? (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1034,6 +1132,64 @@ export function TransactionsContent({
                     {outcome.transaction?.id}
                   </span>
                 )}
+                {outcome.batch ? (
+                  <details className="w-full rounded-lg border p-3 text-xs">
+                    <summary className="cursor-pointer font-medium">
+                      {t('tx.importRows')} · {outcome.createdCount || 0}{' '}
+                      {t('tx.autoStatus.created')} · {outcome.reviewCount || 0}{' '}
+                      {t('tx.autoStatus.needs_review')}
+                    </summary>
+                    <p className="my-2 text-muted-foreground">
+                      {t('tx.cashbookWorkflow')}
+                    </p>
+                    <div className="max-h-80 overflow-auto divide-y">
+                      {outcome.rows?.map((row) => (
+                        <div
+                          key={row.sheet + ':' + row.row}
+                          className="flex flex-wrap items-center justify-between gap-2 py-2"
+                        >
+                          <div>
+                            <strong>
+                              {row.sheet} · {row.row}
+                            </strong>{' '}
+                            ·{' '}
+                            {row.transaction?.reference || row.draft?.reference}{' '}
+                            · {row.transaction?.amount || row.draft?.amount}
+                            <p className="text-amber-700">
+                              {[...row.issues, ...row.warnings].join(' ')}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              row.transaction
+                                ? openEditTransaction(row.transaction)
+                                : openUploadedReview(
+                                    outcome,
+                                    row.draft,
+                                    row.issues,
+                                  )
+                            }
+                          >
+                            {t('scan.reviewAndRecord')}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-4">
+                      <Link className="underline" href="/transactions">
+                        {t('nav.transactions')}
+                      </Link>
+                      <Link className="underline" href="/accounting">
+                        {t('nav.accounting')}
+                      </Link>
+                      <Link className="underline" href="/approvals">
+                        {t('nav.approvals')}
+                      </Link>
+                    </div>
+                  </details>
+                ) : null}
               </div>
             ))}
           </div>
@@ -1352,6 +1508,20 @@ export function TransactionsContent({
                   )}
                 />
                 <Detail label={t('table.category')} value={selected.category} />
+                {selected.sourceDocument ? (
+                  <a
+                    className="text-sm underline"
+                    href={
+                      '/api/documents/' +
+                      encodeURIComponent(selected.sourceDocument.id)
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {selected.sourceDocument.sheet} ·{' '}
+                    {selected.sourceDocument.row} · {t('tx.importRows')}
+                  </a>
+                ) : null}
                 {selected.journalType ? (
                   <Detail
                     label={t('field.journal')}
@@ -1592,7 +1762,7 @@ export function TransactionsContent({
                           { ...source, ...result },
                           ...rows.filter((row) => row.id !== source.id),
                         ]);
-                        if (result.status === 'needs_review')
+                        if (result.status === 'needs_review' && !result.batch)
                           openUploadedReview(
                             source,
                             result.draft,

@@ -17,6 +17,7 @@ export type DocumentSummary = {
   uploadedBy: string;
   createdAt: string;
   processingStatus?: string;
+  linkedTransactionCount?: number;
   suggestedTransaction?: Record<string, unknown> | null;
 };
 
@@ -34,12 +35,14 @@ export async function listDocuments(): Promise<DocumentSummary[]> {
     createdat: string;
     processingstatus: string;
     extractionjson: string | null;
+    linkcount: string;
   }>(
     `
     SELECT d.id, d.file_name AS filename, d.mime_type AS mimetype, d.size_bytes AS sizebytes,
       d.category, d.status, d.linked_reference AS linkedreference,
       COALESCE(u.display_name, 'Unknown') AS uploadedby, d.created_at AS createdat,
-      d.processing_status AS processingstatus,d.extraction_json AS extractionjson
+      d.processing_status AS processingstatus,d.extraction_json AS extractionjson,
+      (SELECT COUNT(*) FROM document_transaction_links l JOIN transactions t ON t.id=l.transaction_id WHERE l.document_id=d.id AND l.organization_id=d.organization_id AND t.posting_status != 'deleted') AS linkcount
     FROM documents d
     LEFT JOIN users u ON u.id = d.uploaded_by
     WHERE d.organization_id = $1
@@ -59,6 +62,7 @@ export async function listDocuments(): Promise<DocumentSummary[]> {
     uploadedBy: row.uploadedby || 'Unknown',
     createdAt: row.createdat,
     processingStatus: row.processingstatus,
+    linkedTransactionCount: Number(row.linkcount),
     suggestedTransaction: row.extractionjson
       ? JSON.parse(row.extractionjson)
       : null,
@@ -166,6 +170,46 @@ export async function reviewDocument(
 ) {
   authorize(user, 'write');
   const organizationId = user.organizationId;
+  const imported = await query<{ transactiondate: string }>(
+    `SELECT t.transaction_date::text AS transactiondate FROM document_transaction_links l JOIN transactions t ON t.id=l.transaction_id WHERE l.document_id=$1 AND l.organization_id=$2 AND t.organization_id=$2 AND t.posting_status != 'deleted'`,
+    [input.id, organizationId],
+  );
+  if (imported.length) {
+    await executeBatch(
+      [
+        {
+          text: 'UPDATE documents SET status=$3 WHERE id=$1 AND organization_id=$2',
+          parameters: [
+            input.id,
+            organizationId,
+            input.verify ? 'Verified' : 'Pending review',
+          ],
+        },
+        {
+          text: `INSERT INTO audit_logs(id,organization_id,action,resource_type,resource_id,new_json,correlation_id) VALUES($1,$2,'review','document',$3,$4,$1)`,
+          parameters: [
+            crypto.randomUUID(),
+            organizationId,
+            input.id,
+            JSON.stringify({
+              actor: user.userId,
+              verify: !!input.verify,
+              importedRows: imported.length,
+            }),
+          ],
+        },
+      ],
+      {
+        organizationId,
+        dates: [
+          ...new Set(
+            imported.map((t) => t.transactiondate.slice(0, 7) + '-01'),
+          ),
+        ],
+      },
+    );
+    return listDocuments();
+  }
   if (!input.linkedReference?.trim())
     throw new Error(
       'Link an existing transaction reference before verification.',

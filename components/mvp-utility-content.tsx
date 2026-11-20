@@ -46,6 +46,7 @@ type DocumentRow = {
   uploadedBy: string;
   createdAt: string;
   processingStatus?: string;
+  linkedTransactionCount?: number;
 };
 function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
@@ -277,6 +278,14 @@ function Documents() {
                 <label className="text-xs">
                   {workflowLabel(lang, 'Transaction reference')}
                   <Input
+                    disabled={!!doc.linkedTransactionCount}
+                    placeholder={
+                      doc.linkedTransactionCount
+                        ? String(doc.linkedTransactionCount) +
+                          ' ' +
+                          t('tx.importRows')
+                        : ''
+                    }
                     value={references[doc.id] ?? doc.linkedReference ?? ''}
                     onChange={(e) =>
                       setReferences({ ...references, [doc.id]: e.target.value })

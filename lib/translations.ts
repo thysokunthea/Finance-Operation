@@ -308,6 +308,14 @@ export const translations: Record<Lang, Record<string, string>> = {
     'tx.autoHint':
       'Supports Excel (.xlsx, .xls), PDF, images, TXT and CSV. One transaction per document. Clear invoice details create Pending records automatically. Missing or uncertain details go to review. Records are never automatically approved or paid.',
     'tx.autoRate': 'KHR per USD (when not printed on the document)',
+    'tx.autoStatus.imported': 'Imported',
+    'tx.autoStatus.importing': 'Importing',
+    'tx.workbookCurrency': 'Workbook currency (when not specified)',
+    'tx.importRows': 'Imported source rows',
+    'tx.cashbookWorkflow':
+      'Receipt → Income / Cash Receipts. Payment → Expense / Cash Disbursements. Balance and total rows are excluded. Records require finance review; no automatic approval or payment.',
+    'tx.journalReviewHint':
+      'Pending entries are shown for review. Totals include approved entries only.',
     'tx.autoRatePlaceholder': 'Required for USD documents',
     'tx.autoProcessing': 'Reading document…',
     'tx.autoCreateNow': 'Create automatically',
@@ -931,6 +939,14 @@ export const translations: Record<Lang, Record<string, string>> = {
     'tx.autoHint':
       'គាំទ្រ Excel (.xlsx, .xls), PDF រូបភាព TXT និង CSV។ មួយប្រតិបត្តិការក្នុងមួយឯកសារ។ ព័ត៌មានវិក្កយបត្រច្បាស់លាស់បង្កើត record រង់ចាំស្វ័យប្រវត្តិ។ ព័ត៌មានខ្វះ ឬមិនច្បាស់ត្រូវពិនិត្យ។ មិនអនុម័ត ឬទូទាត់ស្វ័យប្រវត្តិទេ។',
     'tx.autoRate': 'អត្រា KHR ក្នុង 1 USD (បើមិនមានលើឯកសារ)',
+    'tx.workbookCurrency': 'រូបិយប័ណ្ណក្នុងសៀវភៅ (បើមិនបានបញ្ជាក់)',
+    'tx.importRows': 'ជួរដេកប្រភពដែលបាននាំចូល',
+    'tx.cashbookWorkflow':
+      'Receipt → ចំណូល / Cash Receipts។ Payment → ចំណាយ / Cash Disbursements។ មិនរាប់ Balance និងជួរសរុបជាប្រតិបត្តិការទេ។ ត្រូវពិនិត្យមុនអនុម័ត និងទូទាត់។',
+    'tx.journalReviewHint':
+      'បង្ហាញកំណត់ត្រារង់ចាំសម្រាប់ពិនិត្យ។ សរុបរាប់តែកំណត់ត្រាដែលបានអនុម័ត។',
+    'tx.autoStatus.imported': 'បាននាំចូល',
+    'tx.autoStatus.importing': 'កំពុងនាំចូល',
     'tx.autoRatePlaceholder': 'ត្រូវការសម្រាប់ឯកសារ USD',
     'tx.autoProcessing': 'កំពុងអានឯកសារ…',
     'tx.autoCreateNow': 'បង្កើតស្វ័យប្រវត្តិ',

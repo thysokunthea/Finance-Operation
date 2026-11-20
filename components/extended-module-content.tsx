@@ -308,6 +308,7 @@ function Budgets() {
 }
 
 type JournalTransaction = {
+  nativeAmount?: string;
   approval?: string;
   reportingAmount?: number | null;
   missingExchangeRate?: boolean;
@@ -350,12 +351,11 @@ function Accounting() {
             ),
           );
         setTransactions(
-          (payload.transactions || [])
-            .filter((row) => row.approval?.toLowerCase() === 'approved')
-            .map((row) => ({
-              ...row,
-              amount: String(row.reportingAmount ?? 0),
-            })),
+          (payload.transactions || []).map((row) => ({
+            ...row,
+            nativeAmount: row.amount,
+            amount: String(row.reportingAmount ?? 0),
+          })),
         );
       })
       .catch((error: unknown) =>
@@ -369,6 +369,7 @@ function Accounting() {
   const lines = useMemo(() => {
     const grouped = new Map<string, AccountLine>();
     for (const transaction of transactions) {
+      if (transaction.approval?.toLowerCase() !== 'approved') continue;
       const key = `${transaction.type}::${transaction.category}`;
       const existing = grouped.get(key) || {
         category: transaction.category,
@@ -401,7 +402,11 @@ function Accounting() {
     [transactions, tab],
   );
   const journalTotal = journalRows.reduce(
-    (sum, row) => sum + (Number(row.amount.replace(/[^0-9.-]/g, '')) || 0),
+    (sum, row) =>
+      sum +
+      (row.approval?.toLowerCase() === 'approved'
+        ? Number(row.amount.replace(/[^0-9.-]/g, '')) || 0
+        : 0),
     0,
   );
 
@@ -483,7 +488,11 @@ function Accounting() {
       ) : (
         <ListCard
           title={translateEnum(journalLabels, lang, tab)}
-          description={t('journals.entries', { count: journalRows.length })}
+          description={
+            t('journals.entries', { count: journalRows.length }) +
+            ' · ' +
+            t('tx.journalReviewHint')
+          }
         >
           {journalRows.map((row) => (
             <div
@@ -496,6 +505,7 @@ function Accounting() {
                 <p className="truncate text-xs text-muted-foreground">
                   {row.reference}
                 </p>
+                <p className="text-xs text-amber-700">{row.approval}</p>
               </div>
               <p className="truncate text-xs text-muted-foreground">
                 {row.accountCode
@@ -503,7 +513,7 @@ function Accounting() {
                   : '—'}
               </p>
               <p className="text-right font-mono text-sm font-semibold">
-                {money(Number(row.amount))}
+                {row.nativeAmount || money(Number(row.amount))}
               </p>
             </div>
           ))}

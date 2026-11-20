@@ -38,7 +38,7 @@ export async function changePeriod(
         },
         {
           text: `SELECT ledgerflow_assert(NOT EXISTS(SELECT 1 FROM transactions t WHERE t.organization_id = $1 AND to_char(t.transaction_date,'YYYY-MM') = $2 AND t.posting_status != 'deleted'
-      AND NOT EXISTS(SELECT 1 FROM documents d WHERE d.organization_id = t.organization_id AND d.linked_transaction_id = t.id AND d.status = 'Verified')), 'Verify the linked evidence for each transaction before closing.')`,
+      AND NOT EXISTS(SELECT 1 FROM documents d WHERE d.organization_id = t.organization_id AND d.status = 'Verified' AND (d.linked_transaction_id = t.id OR EXISTS(SELECT 1 FROM document_transaction_links l WHERE l.document_id=d.id AND l.transaction_id=t.id AND l.organization_id=t.organization_id)))), 'Verify the linked evidence for each transaction before closing.')`,
           parameters: [org, period],
         },
         {

@@ -170,6 +170,12 @@ async function initializeCoreSchema(): Promise<void> {
     `ALTER TABLE documents ADD COLUMN IF NOT EXISTS processing_status text NOT NULL DEFAULT 'Uploaded'`,
     `ALTER TABLE documents ADD COLUMN IF NOT EXISTS extraction_json text`,
     `ALTER TABLE documents ADD COLUMN IF NOT EXISTS linked_transaction_id text REFERENCES transactions(id)`,
+    `CREATE TABLE IF NOT EXISTS document_transaction_links (
+      document_id text NOT NULL REFERENCES documents(id), transaction_id text NOT NULL REFERENCES transactions(id),
+      organization_id text NOT NULL REFERENCES organizations(id), source_sheet text NOT NULL, source_row integer NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(document_id, transaction_id),
+      UNIQUE(document_id, source_sheet, source_row)
+    )`,
     `UPDATE documents d SET status='Pending review' WHERE status='Verified' AND NOT EXISTS(SELECT 1 FROM audit_logs a WHERE a.organization_id=d.organization_id AND a.resource_type='document' AND a.resource_id=d.id AND a.action='review')`,
     `CREATE TABLE IF NOT EXISTS report_runs(id text PRIMARY KEY,organization_id text NOT NULL REFERENCES organizations(id),payload_json text NOT NULL,created_by text NOT NULL,created_at timestamptz NOT NULL DEFAULT now())`,
     `ALTER TABLE payment_requests ADD COLUMN IF NOT EXISTS metadata_json text`,

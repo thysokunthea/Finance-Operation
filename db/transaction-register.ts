@@ -39,6 +39,7 @@ export type TransactionRecord = {
   balance?: number;
   version?: number;
   documentIds?: string[];
+  sourceDocument?: { id: string; sheet: string; row: number };
   cashReportingAmount?: number;
   payments?: Array<{ date: string; amount: number; reportingAmount: number }>;
   missingExchangeRate?: boolean;
@@ -120,6 +121,7 @@ export async function listTransactionRecords(): Promise<TransactionRecord[]> {
       balance: Math.max(0, amount - paidAmount),
       reportingAmount,
       payments,
+      sourceDocument: payload.sourceDocument,
       cashReportingAmount: payments.reduce(
         (sum, payment) => sum + payment.reportingAmount,
         0,
@@ -166,9 +168,11 @@ export async function saveTransactionRecord(
   )
     throw new Error('Select a valid type and currency.');
   if (record.currency === 'KHR') record.exchangeRate = '1';
+  const importedDraft = record.approval === 'draft' && !!record.sourceDocument;
   if (
-    !Number.isFinite(Number(record.exchangeRate)) ||
-    Number(record.exchangeRate) <= 0
+    !importedDraft &&
+    (!Number.isFinite(Number(record.exchangeRate)) ||
+      Number(record.exchangeRate) <= 0)
   )
     throw new Error('Enter the KHR exchange rate for this transaction.');
   record.status = 'Pending';
@@ -233,6 +237,19 @@ export async function saveTransactionRecord(
   }
 
   const documentIds = [...new Set(record.documentIds || [])];
+  const source = record.sourceDocument;
+  if (
+    source &&
+    (typeof source.id !== 'string' ||
+      !source.id ||
+      typeof source.sheet !== 'string' ||
+      !source.sheet ||
+      source.sheet.length > 200 ||
+      !Number.isInteger(source.row) ||
+      source.row < 1 ||
+      source.row > 1001)
+  )
+    throw new Error('Invalid spreadsheet source row.');
   if (
     !Array.isArray(record.documentIds || []) ||
     documentIds.length > 20 ||
@@ -366,6 +383,28 @@ export async function saveTransactionRecord(
       ],
     },
   ];
+  if (source)
+    statements.unshift({
+      text: `SELECT ledgerflow_assert(EXISTS(SELECT 1 FROM documents WHERE id=$1 AND organization_id=$2 AND (linked_transaction_id IS NULL OR linked_transaction_id=$3)), 'Spreadsheet source is unavailable or already linked.')`,
+      parameters: [source.id, organizationId, record.id],
+    });
+  if (source)
+    statements.push(
+      {
+        text: `INSERT INTO document_transaction_links(document_id,transaction_id,organization_id,source_sheet,source_row) VALUES($1,$2,$3,$4,$5) ON CONFLICT(document_id,transaction_id) DO NOTHING`,
+        parameters: [
+          source.id,
+          record.id,
+          organizationId,
+          source.sheet,
+          source.row,
+        ],
+      },
+      {
+        text: `UPDATE documents SET processing_status='Imported',status='Pending review' WHERE id=$1 AND organization_id=$2`,
+        parameters: [source.id, organizationId],
+      },
+    );
   if (documentIds.length)
     statements.push(
       {

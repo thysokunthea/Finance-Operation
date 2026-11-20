@@ -1005,4 +1005,313 @@ test('automatic document creation validates evidence, is idempotent and requires
     },
   );
 });
+test('cash book uploads create row transactions and route receipts and payments without importing balances', async (t) => {
+  const XLSX = require('xlsx');
+  const importer = load('db/spreadsheet-import.ts');
+  const planner = load('lib/cashbook-import.ts');
+  let u = await user('finance', 'cashbook-test-org');
+  const rows = [
+    ['DG Cash Book Oct 26'],
+    ['Date', 'Description', 'Receipt', 'Payment', 'Balance'],
+    ['', 'Opening balance', '', '', 1000],
+    ...Array.from({ length: 25 }, (_, index) => [
+      new Date('2026-10-15T00:00:00Z'),
+      index % 2 ? 'Office rent ' + index : 'Sales receipt ' + index,
+      index % 2 ? '' : 100 + index,
+      index % 2 ? 10 + index : '',
+      1000,
+    ]),
+    ['', 'Total', 5000, 5000, 1000],
+  ];
+  const makeBook = (sourceRows) => {
+    const book = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet(sourceRows, { UTC: true });
+    // A missing cached Balance formula must not block valid Receipt / Payment cells.
+    if (sourceRows.length > 3) sheet.E4 = { t: 'n', f: 'SUM(C4)-SUM(D4)' };
+    XLSX.utils.book_append_sheet(book, sheet, 'October');
+    return XLSX.write(book, { bookType: 'xlsx', type: 'buffer' });
+  };
+  const uploadBook = (bytes, name = 'DG_Cash Book Oct 26.xlsx') =>
+    docs.uploadDocument(
+      {
+        fileName: name,
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        sizeBytes: bytes.length,
+        contentBase64: bytes.toString('base64'),
+      },
+      u,
+    );
+  const bytes = makeBook(rows);
+  const source = await uploadBook(bytes);
+  const options = {
+    type: 'Expense',
+    exchangeRate: '4100',
+    defaultCurrency: 'USD',
+    department: 'Operations',
+  };
+  let imported;
+  await t.test(
+    'imports all 25 movement rows in chunks, preserving amount, direction, category and source',
+    async () => {
+      const first = await importer.createSpreadsheetTransactions(
+        source.id,
+        options,
+        u,
+      );
+      assert.equal(first.createdCount, 20);
+      assert.equal(first.nextOffset, 20);
+      const second = await importer.createSpreadsheetTransactions(
+        source.id,
+        { ...options, offset: first.nextOffset },
+        u,
+      );
+      assert.equal(second.createdCount, 5);
+      assert.equal(second.nextOffset, null);
+      imported = await tx.listTransactionRecords();
+      assert.equal(imported.length, 25);
+      assert.equal(imported.filter((r) => r.type === 'Income').length, 13);
+      assert.equal(imported.filter((r) => r.type === 'Expense').length, 12);
+      assert.ok(
+        imported.every(
+          (r) =>
+            r.status === 'Pending' &&
+            r.approval === 'Finance review' &&
+            r.sourceDocument.id === source.id,
+        ),
+      );
+      assert.ok(
+        imported
+          .filter((r) => r.type === 'Income')
+          .every((r) => r.journalType === 'cash_receipts'),
+      );
+      assert.ok(
+        imported
+          .filter((r) => r.type === 'Expense')
+          .every(
+            (r) =>
+              r.journalType === 'cash_disbursements' &&
+              r.accountCode === '6010',
+          ),
+      );
+      assert.equal(
+        (
+          await pg.query(
+            'SELECT COUNT(*)::int AS count FROM transaction_payments WHERE organization_id=$1',
+            [u.organizationId],
+          )
+        ).rows[0].count,
+        0,
+      );
+      assert.equal(
+        (await docs.listDocuments()).find((d) => d.id === source.id)
+          .linkedTransactionCount,
+        25,
+      );
+    },
+  );
+  await t.test(
+    'retries and duplicate file uploads never create the same rows twice',
+    async () => {
+      const retry = await importer.createSpreadsheetTransactions(
+        source.id,
+        options,
+        u,
+      );
+      assert.equal(retry.createdCount, 0);
+      assert.equal(retry.duplicateCount, 20);
+      const copy = await uploadBook(bytes, 'cashbook-copy.xlsx');
+      const copied = await importer.createSpreadsheetTransactions(
+        copy.id,
+        options,
+        u,
+      );
+      assert.equal(copied.createdCount, 0);
+      assert.equal(copied.duplicateCount, 20);
+      assert.equal((await tx.listTransactionRecords()).length, 25);
+      assert.equal(
+        (await docs.listDocuments()).find((d) => d.id === copy.id)
+          .linkedTransactionCount,
+        20,
+      );
+    },
+  );
+  await t.test(
+    'missing rate creates drafts and one workbook retry supplies it for every imported row',
+    async () => {
+      const draftFile = await uploadBook(
+        makeBook([
+          rows[1],
+          [
+            new Date('2026-10-20T00:00:00Z'),
+            'Cash sale without rate',
+            55,
+            '',
+            100,
+          ],
+        ]),
+      );
+      const result = await importer.createSpreadsheetTransactions(
+        draftFile.id,
+        { ...options, exchangeRate: '' },
+        u,
+      );
+      assert.equal(result.createdCount, 1);
+      assert.equal(result.reviewCount, 1);
+      const record = result.transactions[0];
+      assert.equal(record.approval, 'draft');
+      assert.equal(record.reportingAmount, null);
+      const api = load('app/api/transactions/route.ts');
+      const submit = await api.PATCH(
+        new Request('http://test/api/transactions', {
+          method: 'PATCH',
+          body: JSON.stringify({ id: record.id }),
+        }),
+      );
+      assert.equal(submit.status, 400);
+      const retry = await importer.createSpreadsheetTransactions(
+        draftFile.id,
+        options,
+        u,
+      );
+      assert.equal(retry.createdCount, 0);
+      assert.equal(retry.transactions[0].approval, 'Finance review');
+      assert.equal(retry.transactions[0].exchangeRate, '4100');
+    },
+  );
+  await t.test(
+    'invalid rows are reported, empty movements and balance totals are excluded',
+    async () => {
+      const bytes = makeBook([
+        rows[1],
+        ['01/02/2026', 'Ambiguous date', 100, '', 100],
+        ['2026-10-22', 'Two movements', 50, 25, 100],
+        ['', 'Closing balance', '', '', 100],
+      ]);
+      const file = await uploadBook(bytes);
+      const result = await importer.createSpreadsheetTransactions(
+        file.id,
+        options,
+        u,
+      );
+      assert.equal(result.createdCount, 0);
+      assert.equal(result.rows.length, 2);
+      assert.equal(result.reviewCount, 2);
+      assert.match(result.rows[0].issues.join(' '), /Date/);
+      assert.match(result.rows[1].issues.join(' '), /not both/);
+      assert.equal(
+        planner.planCashbookImport(
+          bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength,
+          ),
+          file.id,
+          options,
+        ).entries.length,
+        2,
+      );
+    },
+  );
+  await t.test(
+    'source verification applies to all linked rows; permissions and API dispatch remain scoped',
+    async () => {
+      await docs.reviewDocument(
+        { id: source.id, linkedReference: '', verify: true },
+        u,
+      );
+      assert.equal(
+        (await docs.listDocuments()).find((d) => d.id === source.id).status,
+        'Verified',
+      );
+      const viewer = await user('viewer', 'cashbook-test-org');
+      await assert.rejects(
+        () =>
+          importer.createSpreadsheetTransactions(source.id, options, viewer),
+        /Forbidden/,
+      );
+      const other = await user('finance', 'cashbook-other-org');
+      await assert.rejects(
+        () => importer.createSpreadsheetTransactions(source.id, options, other),
+        /not found/,
+      );
+      u = await user('finance', 'cashbook-test-org');
+      const route = load('app/api/documents/[id]/transaction/route.ts');
+      const response = await route.POST(
+        new Request('http://test/api/documents/' + source.id + '/transaction', {
+          method: 'POST',
+          body: JSON.stringify({ ...options, spreadsheetImport: true }),
+        }),
+        { params: Promise.resolve({ id: source.id }) },
+      );
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).duplicateCount, 20);
+    },
+  );
+  await t.test(
+    'concurrent copies link both source documents to one transaction',
+    async () => {
+      const bytes = makeBook([
+        rows[1],
+        ['2026-10-25', 'Concurrent receipt', 73, '', 73],
+      ]);
+      const one = await uploadBook(bytes, 'concurrent-one.xlsx');
+      const two = await uploadBook(bytes, 'concurrent-two.xlsx');
+      const results = await Promise.all([
+        importer.createSpreadsheetTransactions(one.id, options, u),
+        importer.createSpreadsheetTransactions(two.id, options, u),
+      ]);
+      assert.equal(
+        results.reduce((sum, r) => sum + r.createdCount, 0),
+        1,
+      );
+      const sources = await docs.listDocuments();
+      assert.equal(
+        sources.find((d) => d.id === one.id).linkedTransactionCount,
+        1,
+      );
+      assert.equal(
+        sources.find((d) => d.id === two.id).linkedTransactionCount,
+        1,
+      );
+    },
+  );
+  await t.test(
+    'review rows from earlier chunks remain persisted after later rows succeed',
+    async () => {
+      const data = [
+        rows[1],
+        ['ambiguous', 'Needs date review', 10, '', 10],
+        ...Array.from({ length: 20 }, (_, i) => [
+          '2026-10-27',
+          'Chunk persistence ' + i,
+          22 + i,
+          '',
+          22 + i,
+        ]),
+      ];
+      const source = await uploadBook(makeBook(data), 'chunk-review.xlsx');
+      const first = await importer.createSpreadsheetTransactions(
+        source.id,
+        options,
+        u,
+      );
+      assert.equal(first.reviewCount, 1);
+      await importer.createSpreadsheetTransactions(
+        source.id,
+        { ...options, offset: first.nextOffset },
+        u,
+      );
+      const saved = (await docs.listDocuments()).find(
+        (d) => d.id === source.id,
+      );
+      assert.equal(saved.processingStatus, 'Needs review');
+      assert.equal(saved.suggestedTransaction.reviewRows.length, 1);
+      assert.match(
+        saved.suggestedTransaction.reviewRows[0].issues.join(' '),
+        /Date/,
+      );
+    },
+  );
+});
+
 after(async () => pg.close());

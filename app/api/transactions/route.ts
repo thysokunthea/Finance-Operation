@@ -83,6 +83,10 @@ export async function PATCH(request: Request) {
       (item) => item.id === id,
     );
     if (!record) throw new Error('Transaction not found.');
+    if (record.currency === 'USD' && !(Number(record.exchangeRate) > 0))
+      throw new Error(
+        'Enter the KHR per USD exchange rate before submitting this draft.',
+      );
     await executeBatch(
       [
         {

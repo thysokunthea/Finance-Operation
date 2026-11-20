@@ -1,5 +1,8 @@
 import { getChatGPTUser } from '@/app/chatgpt-auth';
 import { createAutomaticTransaction } from '@/db/automatic-transactions';
+import { createSpreadsheetTransactions } from '@/db/spreadsheet-import';
+
+export const maxDuration = 300;
 
 export async function POST(
   request: Request,
@@ -13,8 +16,11 @@ export async function POST(
     );
   try {
     const { id } = await params;
+    const input = await request.json();
     return Response.json(
-      await createAutomaticTransaction(id, await request.json(), user),
+      input.spreadsheetImport
+        ? await createSpreadsheetTransactions(id, input, user)
+        : await createAutomaticTransaction(id, input, user),
     );
   } catch (error) {
     const message =
