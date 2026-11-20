@@ -42,6 +42,14 @@ export type TransactionRecord = {
   version?: number;
   documentIds?: string[];
   sourceDocument?: { id: string; sheet: string; row: number };
+  cashbookSettlement?: {
+    documentId: string;
+    sheet: string;
+    row: number;
+    date: string;
+    state: 'valued' | 'awaiting_gdt';
+    paymentId: string;
+  };
   cashReportingAmount?: number;
   payments?: Array<{ date: string; amount: number; reportingAmount: number }>;
   missingExchangeRate?: boolean;
@@ -124,6 +132,7 @@ export async function listTransactionRecords(): Promise<TransactionRecord[]> {
       reportingAmount,
       payments,
       sourceDocument: payload.sourceDocument,
+      cashbookSettlement: payload.cashbookSettlement,
       cashReportingAmount: payments.reduce(
         (sum, payment) => sum + payment.reportingAmount,
         0,

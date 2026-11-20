@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { GdtRateField } from './gdt-rate-field';
 import type { GdtQuote } from '@/lib/gdt-exchange-rates';
 import { useGdtRate } from '@/hooks/use-gdt-rate';
+import type { TransactionRecord } from '@/db/transaction-register';
 import { PaymentForm } from './workflow-forms';
 import { readDocumentText } from '@/lib/document-reader';
 import { automaticDocumentFormat } from '@/lib/document-format';
@@ -100,6 +101,7 @@ type TransactionRow = {
   version?: number;
   documentIds?: string[];
   sourceDocument?: { id: string; sheet: string; row: number };
+  cashbookSettlement?: TransactionRecord['cashbookSettlement'];
 };
 type TransactionDraft = Omit<ScannedTransaction, 'confidence' | 'warnings'> & {
   department: string;
@@ -663,11 +665,49 @@ export function TransactionsContent({
       .then(async (response) => {
         const payload = (await response.json()) as {
           transactions?: TransactionRow[];
+          canReconcileCashbook?: boolean;
           error?: string;
         };
         if (!response.ok)
           throw new Error(payload.error || t('tx.noticeLoadFailed'));
-        return payload.transactions || [];
+        let rows = payload.transactions || [];
+        if (
+          payload.canReconcileCashbook &&
+          rows.some(
+            (row) =>
+              row.sourceDocument &&
+              ['cash_receipts', 'cash_disbursements'].includes(
+                row.journalType || '',
+              ) &&
+              (row.status === 'Pending' ||
+                row.cashbookSettlement?.state === 'awaiting_gdt'),
+          )
+        ) {
+          let after: string | null = '';
+          do {
+            const repair = await fetch('/api/transactions/reconcile-cashbook', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ after }),
+            });
+            const result = (await repair.json()) as {
+              transactions?: TransactionRow[];
+              issues?: string[];
+              nextCursor?: string | null;
+              error?: string;
+            };
+            if (!repair.ok) {
+              if (active)
+                showNotice(result.error || t('tx.noticeLoadFailed'), true);
+              break;
+            }
+            rows = result.transactions || rows;
+            if (active && result.issues?.length)
+              showNotice(result.issues.slice(0, 3).join(' '), true);
+            after = result.nextCursor || null;
+          } while (after && active);
+        }
+        return rows;
       })
       .then((rows) => {
         if (!active) return;

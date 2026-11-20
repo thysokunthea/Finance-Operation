@@ -1094,7 +1094,7 @@ test('cash book uploads create row transactions and route receipts and payments 
       assert.ok(
         imported.every(
           (r) =>
-            r.status === 'Pending' &&
+            r.status === 'Paid' &&
             r.approval === 'Finance review' &&
             r.sourceDocument.id === source.id,
         ),
@@ -1120,7 +1120,7 @@ test('cash book uploads create row transactions and route receipts and payments 
             [u.organizationId],
           )
         ).rows[0].count,
-        0,
+        25,
       );
       assert.equal(
         (await docs.listDocuments()).find((d) => d.id === source.id)
@@ -1185,6 +1185,8 @@ test('cash book uploads create row transactions and route receipts and payments 
       assert.equal(result.reviewCount, 1);
       const record = result.transactions[0];
       assert.equal(record.approval, 'draft');
+      assert.equal(record.status, 'Paid');
+      assert.equal(record.cashbookSettlement.state, 'awaiting_gdt');
       assert.equal(record.reportingAmount, null);
       const api = load('app/api/transactions/route.ts');
       gdtOffline = true;
@@ -1591,6 +1593,151 @@ test('GDT rates override client values, preserve payment retries, and fill docum
   );
   assert.equal(response.status, 200);
   assert.equal((await response.json()).transaction.exchangeRate, '4000');
+});
+
+test('existing cash book settlements are corrected without marking ordinary expenses paid or changing approvals', async () => {
+  const XLSX = require('xlsx');
+  let u = await user('finance', 'cash-status-test');
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.aoa_to_sheet([
+      ['Date', 'Description', 'Receipt', 'Payment', 'Balance'],
+      ['2026-11-16', 'Recorded cash income', 10, '', 10],
+      ['2026-11-16', 'Recorded cash expense', '', 20, -10],
+    ]),
+    'Cash',
+  );
+  const bytes = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  const source = await docs.uploadDocument(
+    {
+      fileName: 'Cash Book.xlsx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      contentBase64: bytes.toString('base64'),
+    },
+    u,
+  );
+  const importer = load('db/spreadsheet-import.ts');
+  const result = await importer.createSpreadsheetTransactions(
+    source.id,
+    { type: 'Expense', defaultCurrency: 'USD' },
+    u,
+  );
+  assert.ok(
+    result.transactions.every(
+      (row) => row.status === 'Paid' && row.balance === 0,
+    ),
+  );
+  const expense = result.transactions.find((row) => row.type === 'Expense');
+  await approvals.approveTransaction(
+    expense.id,
+    await user('approver', 'cash-status-test'),
+  );
+  u = await user('finance', 'cash-status-test');
+  // Reproduce the prior importer state in the isolated test database.
+  await pg.query('DELETE FROM transaction_payments WHERE organization_id=$1', [
+    u.organizationId,
+  ]);
+  await pg.query(
+    `UPDATE transactions SET payment_status='Pending',metadata_json=(metadata_json::jsonb - 'cashbookSettlement')::text WHERE organization_id=$1`,
+    [u.organizationId],
+  );
+  const unpaid = await tx.saveTransactionRecord(
+    record('UNPAID-EXPENSE', {
+      type: 'Expense',
+      party: 'Unpaid invoice vendor',
+    }),
+    u,
+  );
+  const migration = load('db/cashbook-settlements.ts');
+  const reconciled = await migration.reconcileCashbookSettlements(u);
+  assert.equal(reconciled.updatedCount, 2);
+  const fixedExpense = reconciled.transactions.find(
+    (row) => row.id === expense.id,
+  );
+  assert.equal(fixedExpense.status, 'Paid');
+  assert.equal(fixedExpense.approval, 'Approved');
+  assert.equal(fixedExpense.balance, 0);
+  assert.equal(
+    reconciled.transactions.find((row) => row.id === unpaid.id).status,
+    'Pending',
+  );
+  assert.equal(
+    reconciled.transactions.find((row) => row.type === 'Income').approval,
+    'Finance review',
+  );
+  const cash = reports.computeReport(
+    'cash-flow-summary',
+    '2026-11',
+    reconciled.transactions,
+  );
+  assert.equal(
+    cash.lines.find((line) => line[0] === 'Cash payments')[1],
+    82000,
+  );
+  assert.equal(cash.lines.find((line) => line[0] === 'Cash receipts')[1], 0);
+  const retry = await migration.reconcileCashbookSettlements(u);
+  assert.equal(retry.updatedCount, 0);
+  assert.equal(
+    (
+      await pg.query(
+        'SELECT COUNT(*)::int AS count FROM transaction_payments WHERE organization_id=$1',
+        [u.organizationId],
+      )
+    ).rows[0].count,
+    2,
+  );
+  const viewer = await user('viewer', 'cash-status-test');
+  await assert.rejects(
+    () => migration.reconcileCashbookSettlements(viewer),
+    /Forbidden/,
+  );
+  u = await user('finance', 'cash-status-test');
+  const route = load('app/api/transactions/reconcile-cashbook/route.ts');
+  assert.equal(
+    (
+      await route.POST(
+        new Request('http://test/api/transactions/reconcile-cashbook', {
+          method: 'POST',
+          body: '{}',
+        }),
+      )
+    ).status,
+    200,
+  );
+  // Mismatched source amounts must never be forced to Paid.
+  await pg.query('DELETE FROM transaction_payments WHERE transaction_id=$1', [
+    expense.id,
+  ]);
+  await pg.query(
+    `UPDATE transactions SET total_minor=total_minor+100,subtotal_minor=subtotal_minor+100,payment_status='Pending',metadata_json=(metadata_json::jsonb - 'cashbookSettlement')::text WHERE id=$1`,
+    [expense.id],
+  );
+  const mismatch = await migration.reconcileCashbookSettlements(u);
+  assert.match(mismatch.issues.join(' '), /does not match/);
+  assert.equal(
+    mismatch.transactions.find((row) => row.id === expense.id).status,
+    'Pending',
+  );
+  const income = result.transactions.find((row) => row.type === 'Income');
+  await pg.query('DELETE FROM transaction_payments WHERE transaction_id=$1', [
+    income.id,
+  ]);
+  await pg.query(
+    `UPDATE transactions SET payment_status='Pending',metadata_json=(metadata_json::jsonb - 'cashbookSettlement')::text WHERE id=$1`,
+    [income.id],
+  );
+  await pg.query(
+    `INSERT INTO closed_periods(organization_id,period,closed_by) VALUES($1,'2026-11','test')`,
+    [u.organizationId],
+  );
+  const closed = await migration.reconcileCashbookSettlements(u);
+  assert.match(closed.issues.join(' '), /closed/);
+  assert.equal(
+    closed.transactions.find((row) => row.id === income.id).status,
+    'Pending',
+  );
 });
 
 after(async () => pg.close());

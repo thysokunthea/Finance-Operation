@@ -8,6 +8,7 @@ import { readSpreadsheetText } from '@/lib/spreadsheet-document';
 import { automaticDocumentFormat } from '@/lib/document-format';
 import { isoDate } from '@/lib/finance';
 import { getGdtRate } from '@/lib/gdt-exchange-rates';
+import { applyCashbookSettlement } from './cashbook-settlements';
 import { createAutomaticTransaction } from './automatic-transactions';
 import { query, executeBatch } from './neon';
 import {
@@ -50,7 +51,10 @@ export async function createSpreadsheetTransactions(
     data.byteOffset,
     data.byteOffset + data.byteLength,
   ) as ArrayBuffer;
-  const plan = planCashbookImport(array, documentId, options);
+  const plan = planCashbookImport(array, documentId, {
+    ...options,
+    cashbook: /cash[\s_\u200b-\u200f-]*book/i.test(document.filename),
+  });
   if (
     !plan.foundTable &&
     /cash[\s_\u200b-\u200f-]*book/i.test(document.filename)
@@ -168,6 +172,7 @@ export async function createSpreadsheetTransactions(
       );
     if (
       record &&
+      !entry.cashMovement &&
       record.approval === 'draft' &&
       !record.exchangeRate &&
       Number(entry.draft.exchangeRate) > 0
@@ -183,12 +188,27 @@ export async function createSpreadsheetTransactions(
       );
     if (record) {
       await linkSource(record, entry);
-      rows.push({ ...entry, status: 'existing', transaction: record });
+      try {
+        record = await applyCashbookSettlement(record, entry, user);
+        rows.push({ ...entry, status: 'existing', transaction: record });
+      } catch (error) {
+        rows.push({
+          ...entry,
+          status: 'needs_review',
+          transaction: record,
+          issues: [
+            error instanceof Error
+              ? error.message
+              : 'Cash book settlement needs review.',
+          ],
+        });
+      }
     } else if (entry.issues.length)
       rows.push({ ...entry, status: 'needs_review' });
     else {
       try {
-        const transaction = await saveTransactionRecord(entry.draft, user);
+        let transaction = await saveTransactionRecord(entry.draft, user);
+        transaction = await applyCashbookSettlement(transaction, entry, user);
         rows.push({ ...entry, status: 'created', transaction });
       } catch (error) {
         const concurrent = (await listTransactionRecords()).find(
@@ -196,7 +216,22 @@ export async function createSpreadsheetTransactions(
         );
         if (concurrent) {
           await linkSource(concurrent, entry);
-          rows.push({ ...entry, status: 'existing', transaction: concurrent });
+          rows.push({
+            ...entry,
+            status:
+              concurrent.status === 'Paid' || !entry.cashMovement
+                ? 'existing'
+                : 'needs_review',
+            transaction: concurrent,
+            issues:
+              concurrent.status === 'Paid' || !entry.cashMovement
+                ? entry.issues
+                : [
+                    error instanceof Error
+                      ? error.message
+                      : 'Cash book settlement needs review.',
+                  ],
+          });
         } else
           rows.push({
             ...entry,
@@ -229,6 +264,9 @@ export async function createSpreadsheetTransactions(
   }
   const reviewRows = plan.entries.flatMap((entry) => {
     const record = saved.find((t) => t.id === entry.draft.id);
+    const runtime = runtimeIssues.get(entry.sheet + ':' + entry.row);
+    if (runtime?.issues.length)
+      return [{ ...entry, transaction: record, issues: runtime.issues }];
     if (record)
       return record.approval === 'draft'
         ? [{ ...entry, transaction: record, issues: entry.warnings }]

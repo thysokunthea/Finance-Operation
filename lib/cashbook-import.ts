@@ -9,6 +9,7 @@ import type { AutomaticOptions } from './automatic-transaction';
 
 export type CashbookOptions = AutomaticOptions & {
   defaultCurrency?: 'USD' | 'KHR';
+  cashbook?: boolean;
 };
 export type CashbookRow = {
   sheet: string;
@@ -16,6 +17,7 @@ export type CashbookRow = {
   draft: TransactionRecord;
   issues: string[];
   warnings: string[];
+  cashMovement: boolean;
 };
 const normalize = (value: string) =>
   value.toLowerCase().replace(/[\s\u200b-\u200f\ufeff_().:/#$-]+/g, '');
@@ -171,6 +173,15 @@ export function planCashbookImport(
       sheet.rows[headerIndex + 1]?.cells,
     );
     const map = columns(header);
+    const cashbookContext =
+      options.cashbook ||
+      sheet.rows
+        .slice(0, headerIndex)
+        .some((row) =>
+          /cash[\s_-]*book|សៀវភៅ.*ចំណូល.*ចំណាយ/i.test(
+            row.cells.join(' ').replace(/[\u200b-\u200f\ufeff]/g, ''),
+          ),
+        );
     const movementColumns = header.flatMap((label, index) => {
       const field = columns([label]);
       const kind =
@@ -229,6 +240,14 @@ export function planCashbookImport(
         );
       const warnings: string[] = [];
       const cash = movement.kind !== 'amount';
+      const cashMovement =
+        cash &&
+        !!(
+          cashbookContext ||
+          /receipt|payment|cashin|cashout|^paid$|^received$|ប្រាក់ចូល|ប្រាក់ចេញ/i.test(
+            normalize(header[movement.index] || ''),
+          )
+        );
       if (
         positive.length > 1 ||
         movements.some((movement) => Number.isNaN(movement.value))
@@ -321,10 +340,10 @@ export function planCashbookImport(
         owner: '',
         accountCode: account.code,
         accountName: account.name,
-        journalType: cash
+        journalType: cashMovement
           ? classifyJournal(type, 'Paid')
           : classifyJournal(type, 'Pending'),
-        documentType: 'Cash book import',
+        documentType: cashMovement ? 'Cash book import' : 'Spreadsheet import',
         taxTreatment: 'Review required',
         sourceDocument: { id: documentId, sheet: sheet.name, row: source.row },
       };
@@ -334,6 +353,7 @@ export function planCashbookImport(
         draft,
         issues,
         warnings,
+        cashMovement,
       });
     }
   }

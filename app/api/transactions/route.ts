@@ -18,7 +18,10 @@ export async function GET() {
   try {
     authorize(user, 'read');
     return Response.json(
-      { transactions: await listTransactionRecords() },
+      {
+        transactions: await listTransactionRecords(),
+        canReconcileCashbook: ['admin', 'finance'].includes(user.role),
+      },
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (error) {
