@@ -10,6 +10,26 @@ export async function readDocumentText(
   progress: (percent: number) => void = () => {},
 ) {
   const format = automaticDocumentFormat(file.name, file.type);
+  if (format === 'word') {
+    const loaded = await import('mammoth/mammoth.browser');
+    let text: string;
+    try {
+      text = (
+        await (loaded.default || loaded).extractRawText({
+          arrayBuffer: await file.arrayBuffer(),
+        })
+      ).value;
+    } catch {
+      throw new Error(
+        'This Word file could not be read. Save an unprotected .docx copy and retry.',
+      );
+    }
+    if (!text.trim())
+      throw new Error('No readable text found in this Word document.');
+    if (text.length > 100000)
+      throw new Error('Large Word documents require manual review.');
+    return text;
+  }
   if (format === 'excel') {
     const { readSpreadsheetText } = await import('./spreadsheet-document');
     return readSpreadsheetText(await file.arrayBuffer());

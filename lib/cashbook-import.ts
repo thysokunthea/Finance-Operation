@@ -2,7 +2,7 @@ import {
   readSpreadsheetSheets,
   unreadableSpreadsheetCell,
 } from './spreadsheet-document';
-import { isoDate } from './finance';
+import { documentDate } from './document-date';
 import { classifyJournal, suggestAccount } from './chart-of-accounts';
 import type { TransactionRecord } from '@/db/transaction-register';
 import type { AutomaticOptions } from './automatic-transaction';
@@ -18,9 +18,16 @@ export type CashbookRow = {
   warnings: string[];
 };
 const normalize = (value: string) =>
-  value.toLowerCase().replace(/[\s_().:/#$-]+/g, '');
+  value.toLowerCase().replace(/[\s\u200b-\u200f\ufeff_().:/#$-]+/g, '');
 const aliases = {
-  date: ['date', 'transactiondate', 'postingdate', 'កាលបរិច្ឆេទ'],
+  date: [
+    'date',
+    'transactiondate',
+    'postingdate',
+    'កាលបរិច្ឆេទ',
+    'ថ្ងៃខែ',
+    'ថ្ងៃខែឆ្នាំ',
+  ],
   description: [
     'description',
     'details',
@@ -38,6 +45,7 @@ const aliases = {
     'debit',
     'dr',
     'ប្រាក់ចូល',
+    'ចំណូល',
   ],
   payment: [
     'payment',
@@ -49,6 +57,7 @@ const aliases = {
     'credit',
     'cr',
     'ប្រាក់ចេញ',
+    'ចំណាយ',
   ],
   amount: ['amount', 'total', 'totalamount', 'ចំនួនទឹកប្រាក់'],
   type: ['type', 'transactiontype'],
@@ -62,6 +71,7 @@ const aliases = {
     'voucherno',
     'voucher',
     'លេខយោង',
+    'លេខវិក្កយបត្រ',
   ],
   party: [
     'party',
@@ -73,9 +83,12 @@ const aliases = {
     'payer',
     'អតិថិជន',
     'អ្នកផ្គត់ផ្គង់',
+    'ឈ្មោះអ្នកផ្គត់ផ្គង់',
   ],
   currency: ['currency', 'ccy', 'រូបិយប័ណ្ណ'],
   rate: ['exchangerate', 'rate', 'khrperusd', 'អត្រាប្ដូរប្រាក់'],
+  tax: ['tax', 'vat', 'taxamount', 'vatamount', 'ពន្ធ', 'អាករ'],
+  subtotal: ['subtotal', 'amountbeforetax', 'សរុបមុនពន្ធ'],
 } as const;
 type Field = keyof typeof aliases;
 function columns(cells: string[]) {
@@ -83,7 +96,16 @@ function columns(cells: string[]) {
   for (const key of Object.keys(aliases) as Field[]) {
     const index = cells.findIndex((cell) => {
       const name = normalize(cell).replace(/usd|khr/g, '');
-      return (aliases[key] as readonly string[]).includes(name);
+      return (
+        (aliases[key] as readonly string[]).includes(name) ||
+        cell
+          .split(/[/|\n]/)
+          .some((part) =>
+            (aliases[key] as readonly string[]).includes(
+              normalize(part).replace(/usd|khr/g, ''),
+            ),
+          )
+      );
     });
     if (index >= 0) result[key] = index;
   }
@@ -91,8 +113,31 @@ function columns(cells: string[]) {
 }
 function valueNumber(value: string) {
   if (!value.trim() || /^[-–—]$/.test(value.trim())) return 0;
-  const clean = value.replace(/USD|KHR|US\$|[$៛,\s]/gi, '');
+  const clean = value.replace(/USD|KHR|US\$|[$៛,\s\u200b-\u200f\ufeff]/gi, '');
+  if (!clean || /^[-–—]$/.test(clean)) return 0;
   return /^\d+(\.\d{1,2})?$/.test(clean) ? Number(clean) : NaN;
+}
+
+const currencyOf = (value: string) =>
+  /\bUSD\b|\$/i.test(value) ? 'USD' : /\bKHR\b|៛/i.test(value) ? 'KHR' : '';
+const isCurrency = (value: string) =>
+  /^(USD|KHR|US\$|\$|៛)$/i.test(value.trim());
+function tableHeader(parent: string[], child?: string[]) {
+  const subheader =
+    !!child?.some(isCurrency) &&
+    child.every((value) => !value.trim() || isCurrency(value));
+  let group = '';
+  const header = Array.from(
+    { length: Math.max(parent.length, subheader ? child!.length : 0) },
+    (_, index) => {
+      const label = parent[index]?.trim() || '';
+      if (label) group = label;
+      return subheader && isCurrency(child![index] || '')
+        ? (label || group) + ' ' + child![index].trim()
+        : label;
+    },
+  );
+  return { header, subheader };
 }
 
 /** One positive cash movement per source row; never turn balances or totals into transactions. */
@@ -121,77 +166,112 @@ export function planCashbookImport(
       continue;
     }
     foundTable = true;
-    const header = sheet.rows[headerIndex].cells;
+    const { header, subheader } = tableHeader(
+      sheet.rows[headerIndex].cells,
+      sheet.rows[headerIndex + 1]?.cells,
+    );
     const map = columns(header);
-    for (const source of sheet.rows.slice(headerIndex + 1)) {
+    const movementColumns = header.flatMap((label, index) => {
+      const field = columns([label]);
+      const kind =
+        field.receipt !== undefined
+          ? 'receipt'
+          : field.payment !== undefined
+            ? 'payment'
+            : field.amount !== undefined
+              ? 'amount'
+              : null;
+      return kind ? [{ index, kind, currency: currencyOf(label) }] : [];
+    });
+    for (const source of sheet.rows.slice(headerIndex + (subheader ? 2 : 1))) {
       const get = (key: Field) => source.cells[map[key] ?? -1]?.trim() || '';
       const description = get('description');
       if (
         /^(opening|closing|beginning|ending)\s*balance|^balance\s*(b\/?f|c\/?f|brought|carried)|^(grand\s*)?total\b|^sub\s*total\b/i.test(
-          description,
+          [description, get('date'), get('reference')].join(' ').trim(),
+        )
+      )
+        continue;
+      if (
+        [description, get('date'), get('reference')].some((value) =>
+          /^(សរុប|សាច់ប្រាក់ដើមគ្រា|សមតុល្យដើមគ្រា|សមតុល្យចុងគ្រា)/.test(value.trim()),
         )
       )
         continue;
       // Ignore repeated headers and balance-only lines, but report malformed movement rows.
       if (normalize(get('date')) === normalize(header[map.date!])) continue;
-      const receipt = valueNumber(get('receipt'));
-      const payment = valueNumber(get('payment'));
-      const direct = valueNumber(get('amount'));
-      if (receipt === 0 && payment === 0 && direct === 0) continue;
+      const movements = movementColumns.map((column) => ({
+        ...column,
+        raw: source.cells[column.index] || '',
+        value: valueNumber(source.cells[column.index] || ''),
+      }));
+      if (movements.every((movement) => movement.value === 0)) continue;
+      // Signatures and job titles below the table are not movement rows.
+      if (
+        !get('date') &&
+        !movements.some(
+          (movement) =>
+            movement.value > 0 || movement.raw === unreadableSpreadsheetCell,
+        )
+      )
+        continue;
+      const positive = movements.filter((movement) => movement.value > 0);
+      const movement = positive[0] || movements[0];
       const issues: string[] = [];
       if (
         (Object.keys(map) as Field[]).some(
           (key) => get(key) === unreadableSpreadsheetCell,
-        )
+        ) ||
+        movements.some((movement) => movement.raw === unreadableSpreadsheetCell)
       )
         issues.push(
           'A transaction cell has an error or a formula without a saved result. Recalculate and save this row.',
         );
       const warnings: string[] = [];
-      const cash = map.receipt !== undefined || map.payment !== undefined;
+      const cash = movement.kind !== 'amount';
       if (
-        cash &&
-        (!(receipt >= 0) || !(payment >= 0) || (receipt > 0 && payment > 0))
+        positive.length > 1 ||
+        movements.some((movement) => Number.isNaN(movement.value))
       )
         issues.push(
-          'Enter one positive Receipt or Payment on this row, not both.',
+          'Enter one positive Receipt or Payment on this row, not both or multiple currencies.',
         );
       const printedType = get('type').toLowerCase();
       const type = cash
-        ? receipt > 0
+        ? movement.kind === 'receipt'
           ? 'Income'
           : 'Expense'
-        : /^(income|receipt|received)$/.test(printedType)
+        : /^(income|receipt|received|ចំណូល)$/.test(printedType)
           ? 'Income'
-          : /^(expense|payment|paid)$/.test(printedType)
+          : /^(expense|payment|paid|ចំណាយ)$/.test(printedType)
             ? 'Expense'
             : options.type;
-      const amount = cash ? (receipt > 0 ? receipt : payment) : direct;
+      const amount = movement.value;
       if (!(amount > 0))
         issues.push('A positive transaction amount is required.');
+      const tax = valueNumber(get('tax'));
+      const subtotal = get('subtotal')
+        ? valueNumber(get('subtotal'))
+        : amount - tax;
+      if (
+        !Number.isFinite(tax) ||
+        !Number.isFinite(subtotal) ||
+        tax < 0 ||
+        subtotal < 0 ||
+        Math.round(subtotal * 100) + Math.round(tax * 100) !==
+          Math.round(amount * 100)
+      )
+        issues.push('Subtotal plus tax must equal the total.');
       let date = '';
       const rawDate = get('date');
       try {
-        if (
-          !/^\d{4}-\d{2}-\d{2}$/.test(rawDate) &&
-          !/[A-Za-z]{3}/.test(rawDate)
-        )
-          throw new Error();
-        date = isoDate(rawDate);
+        date = documentDate(rawDate);
       } catch {
         issues.push('A valid, unambiguous Date is required.');
       }
       if (!description) issues.push('Description is required.');
-      const amountHeader =
-        header[
-          cash ? (receipt > 0 ? map.receipt! : map.payment!) : map.amount!
-        ] || '';
       const printedCurrency = get('currency').toUpperCase();
-      const sourceCurrency = /\bUSD\b|\$/i.test(amountHeader)
-        ? 'USD'
-        : /\bKHR\b|៛/i.test(amountHeader)
-          ? 'KHR'
-          : '';
+      const sourceCurrency = movement.currency;
       const currency =
         printedCurrency || sourceCurrency || options.defaultCurrency || '';
       if (
@@ -222,14 +302,18 @@ export function planCashbookImport(
         id: `IMPORT-${documentId}-${source.row}`,
         date,
         type,
-        reference: get('reference') || `CB-${sheet.name}-${source.row}`,
+        reference:
+          !get('reference') ||
+          /^(គ្មាន|none|n\/?a|[-–—])$/i.test(get('reference'))
+            ? `CB-${sheet.name}-${source.row}`
+            : get('reference'),
         party: get('party') || 'Cash book entry',
         description,
         department: options.department || 'Operations',
         category: account.name,
         amount: Number.isFinite(amount) ? String(amount) : '',
-        subtotal: Number.isFinite(amount) ? String(amount) : '',
-        tax: '0',
+        subtotal: Number.isFinite(subtotal) ? String(subtotal) : '',
+        tax: Number.isFinite(tax) ? String(tax) : '',
         currency,
         exchangeRate: missingRate ? '' : rate,
         status: 'Pending',

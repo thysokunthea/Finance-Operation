@@ -280,7 +280,8 @@ export function TransactionsContent({
     let text = '';
     let readingIssue = '';
     const spreadsheet =
-      automaticDocumentFormat(source.fileName, source.file?.type) === 'excel';
+      automaticDocumentFormat(source.fileName, source.file?.type) === 'excel' ||
+      /\.csv$/i.test(source.fileName);
     try {
       if (!spreadsheet && !source.file)
         throw new Error('Open this file for manual review.');
@@ -1771,7 +1772,15 @@ export function TransactionsContent({
                         else {
                           setDialogOpen(false);
                           setPendingDocuments([]);
-                          setNotice(t('tx.autoStatus.' + result.status));
+                          setNotice(
+                            result.batch
+                              ? t('tx.autoSummary', {
+                                  created: result.createdCount || 0,
+                                  review: result.reviewCount || 0,
+                                  duplicates: result.duplicateCount || 0,
+                                })
+                              : t('tx.autoStatus.' + result.status),
+                          );
                         }
                       } catch (error) {
                         setNotice(

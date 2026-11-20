@@ -1312,6 +1312,196 @@ test('cash book uploads create row transactions and route receipts and payments 
       );
     },
   );
+  await t.test(
+    'Khmer and English split currency headers, Khmer dates and formatted zero cells import correctly',
+    async () => {
+      const book = XLSX.utils.book_new();
+      const sheet = XLSX.utils.aoa_to_sheet([
+        [],
+        [],
+        [],
+        ['សៀវភៅកត់ត្រាចំណូល&ចំណាយ / Cash Book'],
+        ['របាយការណ៍ខែ 11 ឆ្នាំ 2026'],
+        [
+          'ថ្ងៃខែ / Date ',
+          'លេខវិក្កយបត្រ',
+          'ឈ្មោះអ្នកផ្គត់ផ្គង់',
+          'បរិយាយ\u200b / Description',
+          ' ចំណាយ\u200b / Payment ',
+          '',
+          ' សមតុល្យ ',
+          '',
+        ],
+        ['', '', '', '', ' KHR ', ' USD ', ' KHR ', ' USD '],
+        ['', 'សាច់ប្រាក់ដើមគ្រា', '', '', '', '', ' - ', '$1000.00'],
+        [
+          '០៣-វិច្ឆិកា-២៦',
+          'KM-REF-1',
+          'Example supplier',
+          'English description / បរិយាយ',
+          ' - ៛ ',
+          ' $12.50 ',
+          ' - ',
+          '$987.50',
+        ],
+        [
+          '04-Nov-2026',
+          'គ្មាន',
+          'ហាងគំរូ',
+          'ការទិញសម្ភារៈ',
+          '123,400៛',
+          '$-   ',
+          '(123,400)',
+          '$987.50',
+        ],
+        ['សរុប\u200b', '', '', '', '123,400៛', '$12.50', '(123,400)', '$987.50'],
+        ['', 'ពិនិត្យដោយ\u200b', '', '', 'រៀបចំដោយ', 'Example preparer'],
+      ]);
+      sheet['!merges'] = [
+        { s: { r: 5, c: 0 }, e: { r: 6, c: 0 } },
+        { s: { r: 5, c: 3 }, e: { r: 6, c: 3 } },
+      ];
+      XLSX.utils.book_append_sheet(book, sheet, 'វិច្ឆិកា');
+      const bytes = XLSX.write(book, { bookType: 'xlsx', type: 'buffer' });
+      const file = await uploadBook(bytes, 'DG_Cash Book\u200b Nov 26.xlsx');
+      const result = await importer.createSpreadsheetTransactions(
+        file.id,
+        { ...options, defaultCurrency: 'KHR' },
+        u,
+      );
+      assert.equal(result.createdCount, 2);
+      assert.equal(result.reviewCount, 0);
+      const dollars = result.transactions.find((r) => r.currency === 'USD');
+      const riels = result.transactions.find((r) => r.currency === 'KHR');
+      assert.equal(dollars.amount, '$12.50');
+      assert.equal(dollars.date, '3 Nov 2026');
+      assert.equal(riels.amount.replace(/[^0-9.]/g, ''), '123400.00');
+      assert.match(riels.reference, /^CB-/);
+      assert.equal(riels.party, 'ហាងគំរូ');
+      assert.ok(
+        result.transactions.every(
+          (r) => r.journalType === 'cash_disbursements',
+        ),
+      );
+    },
+  );
+  await t.test(
+    'unrecognized cash books return a batch review rather than a blank invoice form',
+    async () => {
+      const source = await uploadBook(
+        makeBook([
+          ['Unknown heading', 'Value'],
+          ['Unrecognized', 20],
+        ]),
+        'DG_Cash Book custom.xlsx',
+      );
+      const result = await importer.createSpreadsheetTransactions(
+        source.id,
+        options,
+        u,
+      );
+      assert.equal(result.batch, true);
+      assert.equal(result.status, 'needs_review');
+      assert.equal(result.createdCount, 0);
+      assert.doesNotMatch(
+        result.issues.join(' '),
+        /Invoice or receipt reference|customer or vendor is required/,
+      );
+    },
+  );
+  await t.test(
+    'CSV transaction tables preserve original subtotal and tax',
+    async () => {
+      const text =
+        'Date,Description,Receipt,Payment,Balance,Tax,Subtotal\n2026-11-22,CSV cash receipt,110,,110,10,100\n2026-11-23,CSV cash payment,,55,55,5,50';
+      const bytes = Buffer.from(text);
+      const source = await docs.uploadDocument(
+        {
+          fileName: 'Cash Book.csv',
+          mimeType: 'text/csv',
+          sizeBytes: bytes.length,
+          contentBase64: bytes.toString('base64'),
+        },
+        u,
+      );
+      const result = await importer.createSpreadsheetTransactions(
+        source.id,
+        options,
+        u,
+      );
+      assert.equal(result.createdCount, 2);
+      assert.equal(
+        result.transactions.find((r) => r.type === 'Income').tax,
+        '10.00',
+      );
+      assert.equal(
+        result.transactions.find((r) => r.type === 'Expense').subtotal,
+        '50.00',
+      );
+    },
+  );
+});
+
+test('Word DOCX extraction preserves mixed Khmer/English text and Khmer calendar dates', async () => {
+  const JSZip = require(
+    require.resolve('jszip', {
+      paths: [path.dirname(require.resolve('mammoth'))],
+    }),
+  );
+  const zip = new JSZip();
+  zip.file(
+    '[Content_Types].xml',
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+  );
+  zip.file(
+    '_rels/.rels',
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+  );
+  const lines = [
+    'Invoice No: DOCX-MIXED-1',
+    'ឈ្មោះអ្នកផ្គត់ផ្គង់៖ Example supplier',
+    'កាលបរិច្ឆេទ / Date៖ ២០-វិច្ឆិកា-២៦',
+    'បរិយាយ៖ Office supplies / សម្ភារៈ',
+    'Currency: USD',
+    'Grand Total: USD 25.00',
+  ];
+  zip.file(
+    'word/document.xml',
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+      lines
+        .map((line) => '<w:p><w:r><w:t>' + line + '</w:t></w:r></w:p>')
+        .join('') +
+      '</w:body></w:document>',
+  );
+  const bytes = await zip.generateAsync({ type: 'nodebuffer' });
+  const { readDocumentText } = load('lib/document-reader.ts');
+  const text = await readDocumentText(new File([bytes], 'mixed.docx'));
+  assert.match(text, /សម្ភារៈ/);
+  const u = await user('finance', 'word-test-org');
+  const source = await docs.uploadDocument(
+    {
+      fileName: 'mixed.docx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      sizeBytes: bytes.length,
+      contentBase64: bytes.toString('base64'),
+    },
+    u,
+  );
+  const result = await load(
+    'db/automatic-transactions.ts',
+  ).createAutomaticTransaction(
+    source.id,
+    { type: 'Expense', exchangeRate: '4100', text },
+    u,
+  );
+  assert.equal(result.status, 'created');
+  assert.equal(result.transaction.date, '20 Nov 2026');
+  assert.equal(result.transaction.party, 'Example supplier');
+  await assert.rejects(
+    () => readDocumentText(new File(['not-a-docx'], 'broken.docx')),
+    /Word file could not be read/,
+  );
 });
 
 after(async () => pg.close());

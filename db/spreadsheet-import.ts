@@ -36,7 +36,10 @@ export async function createSpreadsheetTransactions(
     )
   )[0];
   if (!document) throw new Error('Document not found.');
-  if (automaticDocumentFormat(document.filename, document.mimetype) !== 'excel')
+  if (
+    automaticDocumentFormat(document.filename, document.mimetype) !== 'excel' &&
+    !/\.csv$/i.test(document.filename)
+  )
     throw new Error('Select an Excel workbook.');
   const offset = options.offset ?? 0;
   if (!Number.isInteger(offset) || offset < 0 || offset > 1000)
@@ -47,6 +50,38 @@ export async function createSpreadsheetTransactions(
     data.byteOffset + data.byteLength,
   ) as ArrayBuffer;
   const plan = planCashbookImport(array, documentId, options);
+  if (
+    !plan.foundTable &&
+    /cash[\s_\u200b-\u200f-]*book/i.test(document.filename)
+  ) {
+    const issues = [
+      'Cash book columns could not be recognized. The file was kept for review; it has not been treated as an invoice.',
+      ...plan.sheetIssues,
+    ];
+    await executeBatch([
+      {
+        text: 'UPDATE documents SET processing_status=$3,extraction_json=$4 WHERE id=$1 AND organization_id=$2',
+        parameters: [
+          documentId,
+          user.organizationId,
+          'Needs review',
+          JSON.stringify({ batch: true, issues, reviewRows: [] }),
+        ],
+      },
+    ]);
+    return {
+      batch: true,
+      status: 'needs_review' as const,
+      issues,
+      rows: [],
+      transactions: [],
+      createdCount: 0,
+      duplicateCount: 0,
+      reviewCount: 1,
+      nextOffset: null,
+      totalRows: 0,
+    };
+  }
   if (!plan.foundTable)
     return createAutomaticTransaction(
       documentId,

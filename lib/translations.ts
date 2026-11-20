@@ -306,7 +306,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     'docs.createRecord': 'Create transaction record',
     'tx.autoTitle': 'Automatic Transaction Creation from Uploaded Documents',
     'tx.autoHint':
-      'Supports Excel (.xlsx, .xls), PDF, images, TXT and CSV. One transaction per document. Clear invoice details create Pending records automatically. Missing or uncertain details go to review. Records are never automatically approved or paid.',
+      'Supports Excel (.xlsx, .xls), Word (.docx), PDF, images, TXT and CSV in Khmer, English or both. Cash books and CSV tables create records per transaction row; invoices create one record. Missing or uncertain details go to review.',
     'tx.autoRate': 'KHR per USD (when not printed on the document)',
     'tx.autoStatus.imported': 'Imported',
     'tx.autoStatus.importing': 'Importing',
@@ -937,7 +937,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     'docs.createRecord': 'បង្កើត record ប្រតិបត្តិការ',
     'tx.autoTitle': 'បង្កើតប្រតិបត្តិការស្វ័យប្រវត្តិពីឯកសារដែលផ្ទុកឡើង',
     'tx.autoHint':
-      'គាំទ្រ Excel (.xlsx, .xls), PDF រូបភាព TXT និង CSV។ មួយប្រតិបត្តិការក្នុងមួយឯកសារ។ ព័ត៌មានវិក្កយបត្រច្បាស់លាស់បង្កើត record រង់ចាំស្វ័យប្រវត្តិ។ ព័ត៌មានខ្វះ ឬមិនច្បាស់ត្រូវពិនិត្យ។ មិនអនុម័ត ឬទូទាត់ស្វ័យប្រវត្តិទេ។',
+      'គាំទ្រ Excel (.xlsx, .xls), Word (.docx), PDF រូបភាព TXT និង CSV ជាភាសាខ្មែរ អង់គ្លេស ឬលាយគ្នា។ Cash Book និងតារាង CSV បង្កើត record តាមជួរដេក។ វិក្កយបត្របង្កើតមួយ record។ ព័ត៌មានខ្វះ ឬមិនច្បាស់ត្រូវពិនិត្យ។',
     'tx.autoRate': 'អត្រា KHR ក្នុង 1 USD (បើមិនមានលើឯកសារ)',
     'tx.workbookCurrency': 'រូបិយប័ណ្ណក្នុងសៀវភៅ (បើមិនបានបញ្ជាក់)',
     'tx.importRows': 'ជួរដេកប្រភពដែលបាននាំចូល',

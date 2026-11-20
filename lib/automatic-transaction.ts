@@ -1,4 +1,5 @@
-import { isoDate, minor } from './finance';
+import { minor } from './finance';
+import { documentDate } from './document-date';
 import { parseCsv } from './csv';
 import { classifyJournal, suggestAccount } from './chart-of-accounts';
 import type { TransactionRecord } from '@/db/transaction-register';
@@ -47,6 +48,7 @@ export function planAutomaticTransaction(
     /* Normal invoice text may contain commas without being a CSV. */
   }
   const lines = source
+    .replace(/[\u200b-\u200f\ufeff]/g, '')
     .replace(/[០-៩]/g, (digit) =>
       String(digit.charCodeAt(0) - '០'.charCodeAt(0)),
     )
@@ -57,7 +59,9 @@ export function planAutomaticTransaction(
   const labeled = (labels: string[]) => {
     for (const label of labels) {
       const expression = new RegExp(
-        '^' + label + '(?:\\s*[:#៖]+\\s*|\\s+)(.+)$',
+        '^' +
+          label +
+          '(?:\\s*/\\s*[^:#៖]+(?=[:#៖]))?(?:\\s*[:#៖]+\\s*|\\s+)(.+)$',
         'i',
       );
       const found = lines.map((line) => line.match(expression)).find(Boolean);
@@ -108,6 +112,7 @@ export function planAutomaticTransaction(
           'sold by',
           'payee',
           'អ្នកផ្គត់ផ្គង់',
+          'ឈ្មោះអ្នកផ្គត់ផ្គង់',
           'អាជីវករ',
           'អ្នកទទួល',
         ],
@@ -156,14 +161,13 @@ export function planAutomaticTransaction(
     'receipt date',
     'date',
     'កាលបរិច្ឆេទ',
+    'ថ្ងៃខែ',
     'ថ្ងៃចេញវិក្កយបត្រ',
     'ថ្ងៃចេញ',
   ]);
   let date = '';
   try {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate) && !/[A-Za-z]{3}/.test(rawDate))
-      throw new Error();
-    date = isoDate(rawDate);
+    date = documentDate(rawDate);
   } catch {
     issues.push('A clearly labeled, unambiguous document date is required.');
   }

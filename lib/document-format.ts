@@ -1,5 +1,11 @@
 export function automaticDocumentFormat(name: string, mimeType = '') {
   if (/\.(xlsx|xls)$/i.test(name)) return 'excel';
+  if (
+    /\.docx$/i.test(name) ||
+    mimeType ===
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  )
+    return 'word';
   if (/\.(txt|csv)$/i.test(name)) return 'text';
   if (/\.pdf$/i.test(name)) return 'pdf';
   if (/\.(png|jpe?g|webp|gif|bmp)$/i.test(name)) return 'image';
@@ -16,4 +22,4 @@ export function automaticDocumentFormat(name: string, mimeType = '') {
 }
 
 export const unsupportedDocumentMessage =
-  'Automatic reading supports Excel (.xlsx, .xls), PDF, images, TXT and CSV. Convert this file to a supported format or enter its details manually.';
+  'Automatic reading supports Excel (.xlsx, .xls), Word (.docx), PDF, images, TXT and CSV. Convert this file to a supported format or enter its details manually.';
