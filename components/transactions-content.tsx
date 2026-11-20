@@ -1384,54 +1384,64 @@ export function TransactionsContent({
                     {t('tx.department')}
                   </TableHead>
                   <TableHead>{t('table.status')}</TableHead>
-                  <TableHead className="text-right">
-                    {t('table.amount')}
+                  <TableHead className="min-w-28 text-right">
+                    {t('table.amountKhr')}
+                  </TableHead>
+                  <TableHead className="min-w-28 text-right">
+                    {t('table.amountUsd')}
                   </TableHead>
                   <TableHead className="w-8" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    onClick={() => setSelected(row)}
-                    data-state={
-                      selected?.id === row.id ? 'selected' : undefined
-                    }
-                    className="cursor-pointer"
-                  >
-                    <TableCell>
-                      <p className="font-medium">{row.id}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {row.date} ·{' '}
-                        {translateEnum(txTypeLabels, lang, row.type)}
-                      </p>
-                    </TableCell>
-                    <TableCell>
-                      <p>{row.party}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {row.reference}
-                      </p>
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground lg:table-cell">
-                      {translateEnum(departmentLabels, lang, row.department)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={badgeStyles[row.status]}
-                      >
-                        {translateEnum(statusLabels, lang, row.status)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs font-semibold">
-                      {row.amount}
-                    </TableCell>
-                    <TableCell>
-                      <ChevronRight className="size-4 text-muted-foreground" />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filtered.map((row) => {
+                  const currency =
+                    row.currency || (row.amount.includes('$') ? 'USD' : 'KHR');
+                  return (
+                    <TableRow
+                      key={row.id}
+                      onClick={() => setSelected(row)}
+                      data-state={
+                        selected?.id === row.id ? 'selected' : undefined
+                      }
+                      className="cursor-pointer"
+                    >
+                      <TableCell>
+                        <p className="font-medium">{row.id}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {row.date} ·{' '}
+                          {translateEnum(txTypeLabels, lang, row.type)}
+                        </p>
+                      </TableCell>
+                      <TableCell>
+                        <p>{row.party}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {row.reference}
+                        </p>
+                      </TableCell>
+                      <TableCell className="hidden text-muted-foreground lg:table-cell">
+                        {translateEnum(departmentLabels, lang, row.department)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={badgeStyles[row.status]}
+                        >
+                          {translateEnum(statusLabels, lang, row.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-right font-mono text-xs font-semibold">
+                        {currency === 'KHR' ? row.amount : '—'}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-right font-mono text-xs font-semibold">
+                        {currency === 'USD' ? row.amount : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <ChevronRight className="size-4 text-muted-foreground" />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
             {!loadingRecords && filtered.length === 0 ? (

@@ -270,6 +270,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'table.category': 'Category',
     'table.status': 'Status',
     'table.amount': 'Amount',
+    'table.amountKhr': 'Amount (KHR)',
+    'table.amountUsd': 'Amount (USD)',
     'table.uncategorized': 'Uncategorized',
 
     'budget.title': 'Budget control',
@@ -906,6 +908,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'table.category': 'ប្រភេទ',
     'table.status': 'ស្ថានភាព',
     'table.amount': 'ចំនួនទឹកប្រាក់',
+    'table.amountKhr': 'ចំនួនទឹកប្រាក់ (KHR)',
+    'table.amountUsd': 'ចំនួនទឹកប្រាក់ (USD)',
     'table.uncategorized': 'មិនទាន់ចាត់ថ្នាក់',
 
     'budget.title': 'ការគ្រប់គ្រងថវិកា',
