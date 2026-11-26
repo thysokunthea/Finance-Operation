@@ -214,8 +214,8 @@ export function TransactionsContent({
   );
   const [notice, setNotice] = useState('');
   const [noticeIsError, setNoticeIsError] = useState(false);
-  const [dateFrom, setDateFrom] = useState(() => currentMonthRange().from);
-  const [dateTo, setDateTo] = useState(() => currentMonthRange().to);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState('All departments');
@@ -968,12 +968,11 @@ export function TransactionsContent({
   };
 
   const resetFilters = () => {
-    const range = currentMonthRange();
     setQuery('');
     setStatus('All statuses');
     setDepartmentFilter('All departments');
-    setDateFrom(range.from);
-    setDateTo(range.to);
+    setDateFrom('');
+    setDateTo('');
   };
 
   const updateSubtotal = (value: string) => {
@@ -1418,6 +1417,22 @@ export function TransactionsContent({
         </CardContent>
       </Card>
 
+      {!loadingRecords && typeRows.length > filtered.length ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 text-sm"
+          aria-live="polite"
+        >
+          <p>
+            {t('tx.filteredCount', {
+              shown: filtered.length,
+              total: typeRows.length,
+            })}
+          </p>
+          <Button variant="outline" onClick={resetFilters}>
+            {t('tx.clearFilters')}
+          </Button>
+        </div>
+      ) : null}
       <div className="grid min-h-[590px] gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card className="min-w-0 gap-0">
           <CardHeader className="border-b py-4">
@@ -1531,7 +1546,7 @@ export function TransactionsContent({
           </CardContent>
         </Card>
 
-        {selected ? (
+        {selected && filtered.some((row) => row.id === selected.id) ? (
           <Card className="h-fit gap-0 xl:sticky xl:top-20">
             <CardHeader className="border-b py-4">
               <div>
@@ -2256,15 +2271,6 @@ function formatPickerDate(value: string, lang: 'en' | 'km') {
 function todayInputDate() {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-function currentMonthRange() {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  return {
-    from: `${year}-${String(month + 1).padStart(2, '0')}-01`,
-    to: `${year}-${String(month + 1).padStart(2, '0')}-${String(new Date(year, month + 1, 0).getDate()).padStart(2, '0')}`,
-  };
 }
 function toInputDate(value: string) {
   if (!value) return '';

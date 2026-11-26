@@ -372,6 +372,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'tx.emptyNoMatchCopy': 'Adjust or clear the active filters.',
     'tx.viewAllTransactions': 'View all transactions',
     'tx.clearFilters': 'Clear filters',
+    'tx.filteredCount':
+      'Showing {shown} of {total} records. Filters are hiding the remaining records.',
     'tx.detailTitle': 'Transaction detail',
     'tx.totalAmount': 'Total amount',
     'tx.balancedJournal': 'Balanced journal',
@@ -1006,6 +1008,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'tx.emptyNoMatchCopy': 'កែប្រែ ឬលុបតម្រងដែលកំពុងប្រើ។',
     'tx.viewAllTransactions': 'មើលប្រតិបត្តិការទាំងអស់',
     'tx.clearFilters': 'លុបតម្រង',
+    'tx.filteredCount':
+      'កំពុងបង្ហាញ {shown} ក្នុងចំណោម {total} កំណត់ត្រា។ តម្រងកំពុងលាក់កំណត់ត្រាផ្សេងទៀត។',
     'tx.detailTitle': 'ព័ត៌មានលម្អិតប្រតិបត្តិការ',
     'tx.totalAmount': 'ចំនួនទឹកប្រាក់សរុប',
     'tx.balancedJournal': 'សៀវភៅបញ្ជីតុល្យភាព',
