@@ -2012,4 +2012,51 @@ test('bilingual sales registers import invoice values despite unrelated formula 
   assert.match(review.issues.join(' '), /not been treated as a single invoice/);
 });
 
+test('dashboard recorded revenue includes finance-review income across dates while approved reporting stays separate', () => {
+  const { dashboardTotals } = load('lib/dashboard-totals.ts');
+  const rows = [
+    {
+      date: '2026-07-01',
+      type: 'Income',
+      amount: '$100.00',
+      approval: 'Finance review',
+    },
+    {
+      date: '2026-11-01',
+      type: 'Income',
+      amount: '$50.00',
+      approval: 'Approved',
+    },
+    { date: '03 Sep 2026', type: 'Income', amount: '25', approval: 'Approved' },
+    {
+      date: '2026-11-02',
+      type: 'Expense',
+      amount: '20',
+      approval: 'Finance review',
+    },
+    { date: '2026-11-03', type: 'Income', amount: '500', approval: 'draft' },
+    {
+      date: '2026-11-04',
+      type: 'Income',
+      amount: '1000',
+      approval: 'Rejected',
+    },
+    { date: 'unreadable', type: 'Income', amount: '999', approval: 'Approved' },
+  ];
+  const original = JSON.stringify(rows);
+  const recorded = dashboardTotals(rows, 'all', 'recorded');
+  assert.equal(recorded.revenue, 175);
+  assert.equal(recorded.expenses, 20);
+  assert.equal(recorded.approvedRevenue, 75);
+  assert.equal(recorded.reviewRevenue, 100);
+  assert.equal(recorded.reviewCount, 2);
+  const approved = dashboardTotals(rows, 'all', 'approved');
+  assert.equal(approved.revenue, 75);
+  assert.equal(approved.expenses, 0);
+  assert.equal(dashboardTotals(rows, '2026-11', 'recorded').revenue, 50);
+  assert.equal(dashboardTotals(rows, '2026-07', 'recorded').revenue, 100);
+  assert.equal(dashboardTotals(rows, '2026-07', 'approved').revenue, 0);
+  assert.equal(JSON.stringify(rows), original);
+});
+
 after(async () => pg.close());

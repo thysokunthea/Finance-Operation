@@ -6,6 +6,7 @@ import { cambodiaToday } from '@/lib/cambodia-date';
 import Link from 'next/link';
 import { workflowLabel } from '@/lib/workflow-labels';
 import { dashboardUsdRow, usdValue } from '@/lib/dashboard-currency';
+import { dashboardTotals, type DashboardBasis } from '@/lib/dashboard-totals';
 import { Input } from '@/components/ui/input';
 import {
   AlertCircle,
@@ -155,30 +156,6 @@ function currentMonthKey() {
   return monthValues.includes(key) ? key : '2026-09';
 }
 
-function transactionMonth(dateValue: string) {
-  const direct = dateValue.match(/^(\d{4})-(\d{2})-\d{2}$/);
-  if (direct) return `${direct[1]}-${direct[2]}`;
-  const readable = dateValue.match(/^\d{1,2}\s+([A-Za-z]{3})\s+(\d{4})$/);
-  if (!readable) return '';
-  const month = [
-    'jan',
-    'feb',
-    'mar',
-    'apr',
-    'may',
-    'jun',
-    'jul',
-    'aug',
-    'sep',
-    'oct',
-    'nov',
-    'dec',
-  ].indexOf(readable[1].toLowerCase());
-  return month < 0
-    ? ''
-    : `${readable[2]}-${String(month + 1).padStart(2, '0')}`;
-}
-
 function amountValue(value: string) {
   const parsed = Number(value.replace(/[^0-9.-]/g, ''));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -208,7 +185,8 @@ function changePercent(current: number, previous: number) {
 export function DashboardContent() {
   const { t, lang } = useLanguage();
   const [attentionFilter, setAttentionFilter] = useState('all');
-  const [period, setPeriod] = useState(currentMonthKey);
+  const [period, setPeriod] = useState('all');
+  const [basis, setBasis] = useState<DashboardBasis>('recorded');
   const [department, setDepartment] = useState('all');
   const [rawTransactions, setTransactions] = useState<DashboardTransaction[]>(
     [],
@@ -288,7 +266,8 @@ export function DashboardContent() {
     };
   }, []);
 
-  const monthEndDate = new Date(period + '-01T00:00:00Z');
+  const reportingMonth = period === 'all' ? currentMonthKey() : period;
+  const monthEndDate = new Date(reportingMonth + '-01T00:00:00Z');
   monthEndDate.setUTCMonth(monthEndDate.getUTCMonth() + 1, 0);
   const monthEnd = monthEndDate.toISOString().slice(0, 10);
   const rateDate = monthEnd < cambodiaToday() ? monthEnd : cambodiaToday();
@@ -302,7 +281,8 @@ export function DashboardContent() {
   const needsKhrConversion =
     rawTransactions.some((row) => row.currency === 'KHR') ||
     budgets.some((row) => row.currency === 'KHR');
-  const periodLabel = formatMonthLabel(period, lang);
+  const periodLabel =
+    period === 'all' ? t('tx.allDates') : formatMonthLabel(period, lang);
   const departments = useMemo(
     () =>
       Array.from(
@@ -320,22 +300,17 @@ export function DashboardContent() {
       : transactions.filter(
           (transaction) => transaction.department === department,
         );
-  const periodRows = departmentRows.filter(
-    (transaction) =>
-      transactionMonth(transaction.date) === period &&
-      transaction.approval.toLowerCase() === 'approved',
-  );
-  const priorRows = departmentRows.filter(
-    (transaction) =>
-      transactionMonth(transaction.date) === previousMonth(period) &&
-      transaction.approval.toLowerCase() === 'approved',
-  );
-  const revenue = periodRows
-    .filter((transaction) => transaction.type.toLowerCase() === 'income')
-    .reduce((sum, transaction) => sum + amountValue(transaction.amount), 0);
-  const expenses = periodRows
-    .filter((transaction) => transaction.type.toLowerCase() === 'expense')
-    .reduce((sum, transaction) => sum + amountValue(transaction.amount), 0);
+  const totals = dashboardTotals(departmentRows, period, basis);
+  const recordedTotals =
+    basis === 'recorded'
+      ? totals
+      : dashboardTotals(departmentRows, period, 'recorded');
+  const periodRows = totals.rows;
+  const priorRows =
+    period === 'all'
+      ? []
+      : dashboardTotals(departmentRows, previousMonth(period), basis).rows;
+  const { revenue, expenses } = totals;
   const priorRevenue = priorRows
     .filter((transaction) => transaction.type.toLowerCase() === 'income')
     .reduce((sum, transaction) => sum + amountValue(transaction.amount), 0);
@@ -349,7 +324,7 @@ export function DashboardContent() {
       sum +
       (row.type.toLowerCase() === 'income' ? 1 : -1) *
         (row.payments || [])
-          .filter((p) => p.date.slice(0, 7) <= period)
+          .filter((p) => p.date.slice(0, 7) <= reportingMonth)
           .reduce((n, p) => n + p.reportingAmount, 0),
     0,
   );
@@ -358,40 +333,50 @@ export function DashboardContent() {
       label: t('metric.cashBalance'),
       value: money(cashBalance, true),
       delta: '',
-      note: t('metric.throughThisMonth'),
+      note: formatMonthLabel(reportingMonth, lang),
       icon: Landmark,
       positive: cashBalance >= 0,
     },
     {
-      label: t('metric.revenue'),
+      label: t(
+        basis === 'recorded'
+          ? 'dashboard.recordedRevenue'
+          : 'dashboard.approvedRevenue',
+      ),
       value: money(revenue, true),
-      delta: changePercent(revenue, priorRevenue),
-      note: t('metric.vsLastMonth'),
+      delta: period === 'all' ? '' : changePercent(revenue, priorRevenue),
+      note: period === 'all' ? t('tx.allDates') : t('metric.vsLastMonth'),
       icon: CircleDollarSign,
       positive: revenue >= priorRevenue,
     },
     {
-      label: t('metric.expenses'),
+      label: t(
+        basis === 'recorded' ? 'dashboard.recordedExpenses' : 'metric.expenses',
+      ),
       value: money(expenses, true),
-      delta: changePercent(expenses, priorExpenses),
-      note: t('metric.vsLastMonth'),
+      delta: period === 'all' ? '' : changePercent(expenses, priorExpenses),
+      note: period === 'all' ? t('tx.allDates') : t('metric.vsLastMonth'),
       icon: WalletCards,
       positive: expenses <= priorExpenses,
     },
     {
-      label: t('metric.netResult'),
+      label: t(
+        basis === 'recorded' ? 'dashboard.recordedNet' : 'metric.netResult',
+      ),
       value: money(netResult, true),
-      delta: changePercent(netResult, priorNet),
+      delta: period === 'all' ? '' : changePercent(netResult, priorNet),
       note:
-        netResult >= 0
-          ? t('metric.profitThisMonth')
-          : t('metric.lossThisMonth'),
+        period === 'all'
+          ? t('tx.allDates')
+          : netResult >= 0
+            ? t('metric.profitThisMonth')
+            : t('metric.lossThisMonth'),
       icon: Banknote,
       positive: netResult >= 0,
     },
   ];
   const cashflow = Array.from({ length: 6 }, (_, reverseIndex) => {
-    const [year, month] = period.split('-').map(Number);
+    const [year, month] = reportingMonth.split('-').map(Number);
     const date = new Date(year, month - 1 - (5 - reverseIndex), 1);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     const rows = departmentRows;
@@ -427,8 +412,13 @@ export function DashboardContent() {
       (sum, b) => sum + (usdValue(b.monthlyLimit, b.currency, khrPerUsd) ?? 0),
       0,
     );
+  const budgetExpenses = dashboardTotals(
+    departmentRows,
+    reportingMonth,
+    'approved',
+  ).expenses;
   const budgetUsed =
-    budget > 0 ? Math.min(100, Math.round((expenses / budget) * 100)) : 0;
+    budget > 0 ? Math.min(100, Math.round((budgetExpenses / budget) * 100)) : 0;
   const pendingApprovals = transactions.filter(
     (transaction) =>
       (transaction.approval || '').toLowerCase() === 'finance review',
@@ -585,6 +575,7 @@ export function DashboardContent() {
               className="h-9 appearance-none bg-transparent pl-9 pr-9 text-sm font-medium outline-none"
             >
               <option disabled>{t('dashboard.selectMonth')}</option>
+              <option value="all">{t('tx.allDates')}</option>
               {monthValues.map((value) => (
                 <option key={value} value={value}>
                   {formatMonthLabel(value, lang)}
@@ -593,6 +584,15 @@ export function DashboardContent() {
             </select>
             <ChevronRight className="pointer-events-none absolute right-3 size-4 rotate-90 text-muted-foreground" />
           </label>
+          <select
+            aria-label={t('dashboard.basis')}
+            value={basis}
+            onChange={(event) => setBasis(event.target.value as DashboardBasis)}
+            className="h-9 rounded-lg border bg-card px-3 text-sm"
+          >
+            <option value="recorded">{t('dashboard.recordedBasis')}</option>
+            <option value="approved">{t('dashboard.approvedBasis')}</option>
+          </select>
           <Select
             value={department}
             onValueChange={(value) => setDepartment(value || 'all')}
@@ -679,6 +679,24 @@ export function DashboardContent() {
           );
         })}
       </section>
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 text-sm"
+        aria-live="polite"
+      >
+        <p>
+          {t('dashboard.revenueBreakdown', {
+            approved: money(recordedTotals.approvedRevenue),
+            review: money(recordedTotals.reviewRevenue),
+          })}{' '}
+          {t('dashboard.basisHint')}
+        </p>
+        <Link
+          className="whitespace-nowrap text-primary underline"
+          href="/approvals"
+        >
+          {t('nav.approvals')}
+        </Link>
+      </div>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(340px,.85fr)]">
         <Card className="shadow-[0_1px_2px_rgb(15_23_42/3%)]">
@@ -921,7 +939,8 @@ export function DashboardContent() {
           <CardHeader>
             <CardTitle>{t('budget.title')}</CardTitle>
             <CardDescription>
-              {periodLabel} {t('budget.operatingBudget')}
+              {formatMonthLabel(reportingMonth, lang)}{' '}
+              {t('budget.operatingBudget')}
             </CardDescription>
             <CardAction>
               <span className="text-xs font-medium">
@@ -933,7 +952,7 @@ export function DashboardContent() {
             <div>
               <div className="mb-2 flex items-baseline justify-between">
                 <p className="metric-value text-2xl font-semibold">
-                  {money(expenses, true)}
+                  {money(budgetExpenses, true)}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {t('budget.of')} {money(budget, true)}
@@ -950,7 +969,7 @@ export function DashboardContent() {
                   {t('budget.actual')}
                 </p>
                 <p className="mt-1 text-sm font-semibold">
-                  {money(expenses, true)}
+                  {money(budgetExpenses, true)}
                 </p>
               </div>
               <div className="border-x">
@@ -964,7 +983,7 @@ export function DashboardContent() {
                   {t('budget.remaining')}
                 </p>
                 <p className="mt-1 text-sm font-semibold text-emerald-600">
-                  {money(Math.max(0, budget - expenses), true)}
+                  {money(Math.max(0, budget - budgetExpenses), true)}
                 </p>
               </div>
             </div>
