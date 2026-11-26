@@ -632,6 +632,18 @@ export function TransactionsContent({
       type === 'All' ? records : records.filter((row) => row.type === type),
     [records, type],
   );
+  const paymentLabel = (row: { type: string; status: string }) => {
+    if (row.status === 'Pending')
+      return t(
+        row.type === 'Income'
+          ? 'tx.collectionNotRecorded'
+          : 'tx.paymentNotRecorded',
+      );
+    if (row.status === 'Paid' && row.type === 'Income') return t('tx.received');
+    if (row.status === 'Partially Paid' && row.type === 'Income')
+      return t('tx.partiallyReceived');
+    return translateEnum(statusLabels, lang, row.status);
+  };
   const filtered = useMemo(
     () =>
       typeRows.filter(
@@ -1300,7 +1312,7 @@ export function TransactionsContent({
             >
               {Object.keys(statusLabels.en).map((value) => (
                 <option key={value} value={value}>
-                  {translateEnum(statusLabels, lang, value)}
+                  {paymentLabel({ type, status: value })}
                 </option>
               ))}
             </select>
@@ -1456,7 +1468,8 @@ export function TransactionsContent({
                   <TableHead className="hidden lg:table-cell">
                     {t('tx.department')}
                   </TableHead>
-                  <TableHead>{t('table.status')}</TableHead>
+                  <TableHead>{t('table.transactionType')}</TableHead>
+                  <TableHead>{t('table.paymentStatus')}</TableHead>
                   <TableHead className="min-w-28 text-right">
                     {t('table.amountKhr')}
                   </TableHead>
@@ -1498,9 +1511,21 @@ export function TransactionsContent({
                       <TableCell>
                         <Badge
                           variant="outline"
+                          className={
+                            row.type === 'Income'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                              : 'border-slate-200 bg-slate-50 text-slate-700'
+                          }
+                        >
+                          {translateEnum(txTypeLabels, lang, row.type)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
                           className={badgeStyles[row.status]}
                         >
-                          {translateEnum(statusLabels, lang, row.status)}
+                          {paymentLabel(row)}
                         </Badge>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-right font-mono text-xs font-semibold">
@@ -1568,12 +1593,24 @@ export function TransactionsContent({
                 </div>
                 <Badge
                   variant="outline"
-                  className={badgeStyles[selected.status]}
+                  className={
+                    selected.type === 'Income'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                      : 'border-slate-200 bg-slate-50 text-slate-700'
+                  }
                 >
-                  {translateEnum(statusLabels, lang, selected.status)}
+                  {translateEnum(txTypeLabels, lang, selected.type)}
                 </Badge>
               </div>
               <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-xs">
+                <Detail
+                  label={t('table.transactionType')}
+                  value={translateEnum(txTypeLabels, lang, selected.type)}
+                />
+                <Detail
+                  label={t('table.paymentStatus')}
+                  value={paymentLabel(selected)}
+                />
                 <Detail
                   label={t('table.counterparty')}
                   value={selected.party}
